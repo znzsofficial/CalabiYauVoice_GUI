@@ -13,6 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.AppShapes
@@ -23,52 +27,49 @@ import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 @Composable
 internal fun DropFilterBar(
     summary: String, label: String, onClick: () -> Unit,
-    enabled: Boolean = true, activeFilter: Boolean = false, onReset: (() -> Unit)? = null
+    enabled: Boolean = true, activeFilter: Boolean = false
 ) {
     FlowRow(
-        Modifier.fillMaxWidth().heightIn(min = 40.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             summary,
-            Modifier.weight(1f).align(Alignment.CenterVertically),
+            Modifier.align(Alignment.CenterVertically).padding(end = 8.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Surface(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.align(Alignment.CenterVertically),
-            shape = AppShapes.chip,
-            color = if (activeFilter) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerHigh
+            onClick = onClick, enabled = enabled, modifier = Modifier.align(Alignment.CenterVertically).semantics {
+                role = Role.Button
+                this.onClick(label = "查看筛选选项", action = null)
+            }, shape = AppShapes.chip,
+            color = if (activeFilter) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    Icons.Outlined.Tune,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (activeFilter) MaterialTheme.colorScheme.onSecondaryContainer
-                    else MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = if (activeFilter) MaterialTheme.colorScheme.onSecondaryContainer
-                    else MaterialTheme.colorScheme.onSurface
-                )
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Outlined.Tune, null, Modifier.size(16.dp),
+                    tint = if (activeFilter) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary)
+                Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium,
+                    color = if (activeFilter) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface)
             }
         }
-        if (onReset != null) {
-            TextButton(onClick = onReset, modifier = Modifier.align(Alignment.CenterVertically)) {
-                Text("重置")
-            }
+    }
+}
+
+/** Each action clears only what its label names. In particular, a quality change preserves the search. */
+@Composable
+internal fun ExtractionEmptyResults(
+    message: String, onClearQuery: (() -> Unit)? = null, onClearFilters: (() -> Unit)? = null,
+    onShowZero: (() -> Unit)? = null
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (onShowZero != null) TextButton(onClick = onShowZero) { Text("显示零掉落来源") }
+            if (onClearQuery != null) TextButton(onClick = onClearQuery) { Text("清除搜索") }
+            if (onClearFilters != null) TextButton(onClick = onClearFilters) { Text("清除筛选") }
         }
     }
 }
@@ -111,40 +112,41 @@ internal fun DropLookupRowSkeleton(modifier: Modifier = Modifier, source: Boolea
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SkeletonTextLine(widthFraction = 0.65f, height = titleHeight)
-                ShimmerBox(Modifier.width(if (source) 76.dp else 128.dp).height(if (source) bodyHeight else badgeHeight))
-                if (source) SkeletonTextLine(widthFraction = 0.65f, height = bodyHeight)
+                if (source) {
+                    SkeletonTextLine(widthFraction = 0.8f, height = bodyHeight)
+                    SkeletonTextLine(widthFraction = 0.65f, height = with(LocalDensity.current) { typography.labelMedium.lineHeight.toDp() } + 6.dp)
+                } else ShimmerBox(Modifier.width(128.dp).height(badgeHeight))
             }
             Spacer(Modifier.size(24.dp))
         }
     }
 }
 
-/** Header, example item and count rule match the compact source card. */
+/** Source heading, metadata and a single candidate preview; the tab and search remain live. */
 @Composable
 internal fun DropSourceCardSkeleton(modifier: Modifier = Modifier) {
     val typography = MaterialTheme.typography
     val titleHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
     val bodyHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
-    val labelHeight = with(LocalDensity.current) { typography.labelLarge.lineHeight.toDp() }
     Surface(
         modifier.clearAndSetSemantics {},
         shape = AppShapes.compactCard,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ShimmerBox(Modifier.size(40.dp), shape = AppShapes.sectionIcon)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SkeletonTextLine(widthFraction = 0.65f, height = titleHeight)
                     SkeletonTextLine(widthFraction = 0.4f, height = bodyHeight)
                 }
+                Spacer(Modifier.size(24.dp))
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ShimmerBox(Modifier.size(40.dp), shape = AppShapes.chip)
-                SkeletonTextLine(widthFraction = 0.6f, height = bodyHeight)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ShimmerBox(Modifier.size(36.dp), shape = AppShapes.chip)
+                SkeletonTextLine(widthFraction = 0.6f, height = with(LocalDensity.current) { typography.bodyMedium.lineHeight.toDp() })
             }
-            SkeletonTextLine(widthFraction = 0.7f, height = labelHeight)
         }
     }
 }

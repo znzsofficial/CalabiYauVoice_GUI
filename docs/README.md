@@ -3,7 +3,7 @@
 ## 从这里开始
 
 - **安装或从源码运行**：[Android 下载站](https://wiki.nekolaska.vip/) · [中文构建说明](../README_ZH_CN.md#-构建与运行) · [English build instructions](../README.md#-build-and-run)。Windows 桌面端可从源码运行，本次发布只分发 Android APK。
-- **接续开发**：从 [Android 当前架构](android-architecture.md) 找模块；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
+- **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
 - **排查线上问题**：Wiki 登录或投票看[账号会话](android-webview-auth.md#cookie-会话边界)，图鉴读不到数据看[快照索引](live-wiki-tests.md)，后台数字看[统计口径](app-usage.md#面板与口径)。
 - **验证与发版**：[设备验收清单](device-acceptance.md)记录仍需实机操作的项目；[发布清单](release-version-checklist.md)列出签名、迁移和主站核验顺序。
 
@@ -25,32 +25,33 @@
 - [新人入坑指南](beginner-guide.md)：玩法入门、版本与下载、装备及设置建议、常见问题。
 - [PC 游戏设置](pc-game-settings.md)：设置、推荐和参考表的语义边界。
 - [弦化、角色定位与增幅网络](native-mechanics-pages.md)：三页原生阅读和完整导航分流。
-- [弦溯战线](extraction-mode-implementation.md)：物资、配件、掉落反查；旧物品页迁移和未命名 Q8 的兼容规则。
+- [弦溯战线](extraction-mode-implementation.md)：专题入口、掉落反查、物资与配件、弦溯专属装备和工坊。
 - [裂隙与生化卡池](rift-bio-pool-followup.md)：地图、双卡表、正式分享索引。
 
 ### 图鉴与资料
 
 - [角色详情](character-detail-presentation.md)：技能、设定、关系和呈现规则。
-- [武器解析](weapon-parsing-audit.md)：伏闪时间轴、按模式展示的武器增幅、多使用者入口与参数审计。
+- [武器解析](weapon-parsing-audit.md)：详情数据来源、图片文件名回退、伏闪时间轴及模式增幅。
 - [玩家装饰](player-decoration-catalogs.md)：Lua 双表/HTML 主源、获取方式、缺图和预览。
-- [列表健壮性](wiki-list-resilience.md)：角色、武器、地图的身份与完整性。
-- [导航覆盖审计](wiki-navigation-coverage.md)：历史菜单矩阵和2.2.1增量，非实时全站清单。
-- [联网与本地快照测试](live-wiki-tests.md)：完整快照环境变量索引、主动联网开关、证据来源和请求节流。
+- [列表健壮性](wiki-list-resilience.md)：角色、武器和地图的身份与完整性；通用 HTML 解析与图片查询另见 [Wiki 开发指南](android-wiki-feature-guide.md)。
+
+### 上游变更与验证
+
+- [联网与本地快照测试](live-wiki-tests.md)：先找对应页面的快照；需要核对实时 Wiki 时再查联网开关、请求节流和捕获格式。
 
 ## 历史审查与设计记录
 
+- [导航覆盖审计](wiki-navigation-coverage.md)：当时的菜单矩阵和 2.2.1 增量，不是实时全站清单。
 - [2.2.1 架构审查](android-architecture-fixes.md)、[2.2.2 二次复审](android-architecture-round-two.md)：当时修复了什么，以及哪些场景有回归证据。
 - [UI 优化实施记录](android-ui-refactor-plan.md)：2.2.0已完成改动、2.2.1文案更新，以及明确标注的历史计划。
 - [工具视觉回退](tools-mesh-tab-surfaces.md)：保留已确认的视觉选择，避免后续重新引入被否决设计。
 
 ## 发布记录
 
-当前发布：[Android 2.2.4（65）](releases/2.2.4.md)，2026-11-21。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+当前发布：[Android 2.2.5（66）](releases/2.2.5.md)，2026-11-22。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 
 ## 归档与维护口径
 
-- [旧会话交接](session-handoff.md)仅用于追溯，里面的“待提交/待发布”不代表当前任务状态。
-- [`webApp`](../webApp/README.md)是归档的Compose演示；生产网页在 `downloadPage/`。
-- 当前行为写入对应专题；实施经过和测试数量写入发布/修复记录。不要在每个专题复制一份“最新版本”和全量测试总数。
-- 上游快照的数量、修订号和外部文件路径保留其日期；不能把历史捕获描述成实时Wiki结果。
-- 修改基础契约时同步对应专题与 [`AGENTS.md`](../AGENTS.md)。文档整理只做链接/内容/diff检查，不触发构建、上传或重新部署。
+- **现行规则**：每条详细规则只在负责该行为的专题维护。跨模块引用时链接到该处，不复制字段清单和例外条件。根协作指南只在模块入口、通用命令或跨模块规则变化时更新。
+- **验证证据**：修订号、快照数量和测试结果写入有日期的审查或发布记录；真机未验事项集中到[设备验收清单](device-acceptance.md)。
+- **历史资料**：[旧会话交接](session-handoff.md)和旧计划用于追溯，不代表当前待办；[`webApp/`](../webApp/README.md) 是归档原型，生产网页在 `downloadPage/`。

@@ -1,6 +1,6 @@
 # Android 当前架构
 
-基线：[2.2.4（65）](releases/2.2.4.md)，2026-11-21。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
+基线：[Android 2.2.5（66）](releases/2.2.5.md)。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备待验场景见[验收清单](device-acceptance.md)。
 
 ## 模块边界
 
@@ -20,6 +20,7 @@
 
 - MainScreen管理主目的地、抽屉及覆盖在Hub上的Wiki浏览器；主页面退出组合，不让所有页面常驻。
 - Hub使用 `WikiRoute`、`WikiRouteCodec` 和页面保存域维护栈、筛选与滚动。转场中的旧页面回调须核验当前栈顶，预测返回由现有协调器负责。
+- 首页分别保存角色与地图预览的筛选和位置。首页与设置复用六槽快捷入口编辑器，只有保存草稿才更新偏好；设置子页按父子关系返回。见[首页与设置导航](android-navigation-followup.md)。
 - 简单只读页使用 `LoadState`；投票、卡组、留言等复杂业务使用独立状态类；下载由ViewModel和StateFlow承接。没有“所有页面必须改成ViewModel”的要求。
 - 完整导航可通过 `WikiNativeLinks` 分流到明确匹配的原生页面；原文按钮、未知/带锚点/编辑/旧版本链接继续网页。
 
@@ -55,7 +56,7 @@
 
 ## 原生覆盖边界
 
-角色/武器/地图详情、装饰及弦溯图鉴、PC设置、新人指南、弦化/定位/增幅网络等已有原生实现。公告、活动、剧情、历史、投稿等有原生目录，但部分正文或外站作品仍走网页。
+角色/武器/地图详情、装饰、PC设置、新人指南、弦化/定位/增幅网络等已有原生实现。首页的[弦溯战线专题](extraction-mode-implementation.md)提供按物品／来源的掉落查询、物资／配件、枪械／防具和工坊；「掉落表格」保留网页原文。公告、活动、剧情、历史、投稿等有原生目录，但部分正文或外站作品仍走网页。
 
 特别行动、赫尔墨斯、赛事系统仍是网页入口；视频交给外部播放入口。登录、编辑、投稿表单不因原生阅读页新增而被替代。具体名单和历史证据见[导航覆盖](wiki-navigation-coverage.md)。
 

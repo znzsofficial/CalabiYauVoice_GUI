@@ -51,7 +51,7 @@
 
 `canCache` 要求全部预期表格上下文存在、每表资料行数达到当前完整快照基线、字段集符合所属章节、跨行单元格完整结束、两段科普保有至少 8/5 个正文块。缺少整列、缺少尾表、缺少资料行、重复顶级章节、异常合并单元格都产生可诊断错误。当前没有上游声明总数，因此采用**按语义上下文的保守完整性基线**；若 Wiki 合法删除条目或调整章节／字段，需要核验新快照后更新基线，不能随意放松检查以接受半页结果。新增行可通过，不把全页固定 323 行作为生产上限。
 
-独立缓存键为 **`pc_game_settings_v1`**，使用既有 `OfflineCache.Type.GAME_TIPS` 目录（与 Tips 自己的键隔离）。MediaWiki JSON、可选页面标题及页面结构在 `OfflineCache.fetchWithCache(validatePayload=...)` 写盘前校验；异常网络响应回退到原有好缓存。读出的磁盘数据还会经过 API 完整性校验，错误／残缺页不显示为成功结果。
+独立缓存键为 **`pc_game_settings_v1`**，使用既有 `OfflineCache.Type.GAME_TIPS` 目录（与 Tips 自己的键隔离）。本页读取策略在 `OfflineCache.fetchWithPolicy` 的同键请求合并、锁与写入代数保护内执行；写盘前校验 MediaWiki JSON、可选页面标题及页面结构。异常网络响应回退到原有好缓存。读出的磁盘数据还会经过 API 完整性校验，错误／残缺页不显示为成功结果。
 
 `PcGameSettingsApi.fetch(forceRefresh, cacheOnly, allowMemoryCache)` 继承公共缓存行为：
 
@@ -94,3 +94,14 @@ Tracked 小 fixture：`androidApp/src/test/resources/fixtures/gamesettings/pc_se
 - 小fixture `upscaling_reference.html` 覆盖真实新标题和比例表。`PC_GAME_SETTINGS_API_AUDIT_FILE` 指向真实JSON响应，验证完整取数→校验→缓存提交→API链路，核对 **34表／323设置／31推荐／4参考行**；另验证坏新响应保留好缓存、无缓存时报告PARSE。
 - 同时配置旧 `PC_GAME_SETTINGS_AUDIT_FILE` 网页快照及新API快照，PC设置／Hub专项 **35项，0 failures/errors/skips**，Android编译和Lint通过（0 errors / 5既有warnings）。构建使用排查时工作区已有的AGP9.5.1／serialization1.13.0升级；首次离线构建缺AAPT2，下载依赖后的完整检查通过。
 - 本机证据：`C:/Users/NekoLaska/AppData/Local/Temp/opencode/pc-settings-load-fix/response.json`、`api.html`。本轮只读取一次Wiki接口，回归均离线读取捕获。修复已随 [2.2.0（61）](releases/2.2.0.md) 发布；未替换历史2.1.30安装包。
+
+## 2.2.5：无缓存首开时的网络恢复与错误分类
+
+[2.2.5（66）](releases/2.2.5.md) 纳入无缓存首开的有限重试，并区分临时网络故障、Wiki 错误和页面解析失败。Wi-Fi 刚连上时的首屏表现仍列在[设备验收清单](device-acceptance.md)。
+
+11 月 21 日的真实 parse JSON 仍通过 34 表／323 设置／31 推荐／4 参考行校验。可复现的两条失败路径是：首读时系统暂报没有默认路由、请求没有发出；或 Wiki 已返回错误，但 `safeGet` 将其与传输失败一起转成 `null`。没有出错当次的设备日志，不能断言用户遇到哪一种。
+
+- 普通加载无可用缓存且无默认路由时，750 ms 后复查一次；路由仍不可用则不发 GET。若已有路由，仅对指定的临时传输错误或 HTTP 408/500/502/504，在没有可用缓存时等 6.5 秒再试一次。路由等待与 GET 重试共用一次恢复机会；手刷不再追加页面级重试。
+- 本页使用可取消的 GET，保留 HTTP 状态和 MediaWiki 错误码。访问受限（含 567）、`Retry-After`、业务错误和坏页面都不触发页面重试；本页请求也不进入公共 HTTP 状态码重试循环。好缓存直接离线回退，保留年龄。仅读盘能区分不存在与内容损坏，坏缓存不覆盖新请求的错误原因。
+- 错误响应在收到响应头时就交回本页处理，避免传输层对 `503 + Retry-After: 0` 再发一次 GET。回环 HTTP 用例按服务端实际收到的请求数检验 429／503 的单次读取行为。
+- 本地验证使用 `PC_GAME_SETTINGS_API_AUDIT_FILE=.../pc-game-settings-2.2.4-current.json`。`PcGameSettingsFullPageAuditTest.currentParseApiResponseLoadsThroughValidationCacheAndApi` 模拟路由恢复和首次 502 再成功；`PcGameSettingsSourceTest` 验证失败分类、请求次数和等待途中取消。连同 `WikiDiskPublicationTest`、`NetworkInfrastructureTest` 共 12 项通过，无跳过。

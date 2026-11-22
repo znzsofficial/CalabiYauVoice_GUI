@@ -94,6 +94,10 @@ class ExtractionContainerTest {
         val published = result.entries.single { it.containerId == "10001" }
         assertTrue(published.dropPoolGroups.isEmpty())
         assertNull(result.entries.last().containerId)
+        assertEquals("0 项候选物品", dropCandidateSummary(published, isContainer = true))
+        assertEquals("候选物品尚未公布", dropCandidateSummary(result.entries.last(), isContainer = true))
+        val zero = result.entries.single { it.dropCountState == DropCountState.ZERO }
+        assertEquals("3 项候选物品", dropCandidateSummary(zero, isContainer = true))
     }
 
     @Test fun distributionsDoNotTreatMissingOrMalformedAsZero() {

@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -9,9 +10,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,10 +28,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -60,6 +62,7 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GpsFixed
@@ -78,13 +81,11 @@ import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -92,6 +93,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarState
@@ -99,6 +101,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -114,6 +117,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -121,10 +125,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -186,60 +198,31 @@ internal fun WikiHomePage(
     onHomeMapModeChanged: (Int) -> Unit,
     backdrop: Backdrop,
     sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    isPageActive: Boolean = true
 ) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     var searchQuery by rememberSaveable(resetKey) { mutableStateOf("") }
+    var showMaps by rememberSaveable(resetKey) { mutableStateOf(false) }
+    val factionFilterScroll = rememberScrollState()
+    val modeFilterScroll = rememberScrollState()
 
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val contentBounds = remember { mutableStateOf(Rect.Zero) }
-    val portraitBounds = remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(wallpaperUrl) {
         val color = WallpaperSeedColor.resolve(context, wallpaperUrl)
         if (color != 0) wallpaperSeedColor.intValue = color
     }
-    LaunchedEffect(factions, selectedHomeFaction, listState, characterRowState, context, lifecycleOwner) {
-        val characters = factions.getOrNull(selectedHomeFaction.coerceIn(0, factions.lastIndex.coerceAtLeast(0)))
-            ?.characters.orEmpty()
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            snapshotFlow {
-                val sectionVisible = listState.layoutInfo.visibleItemsInfo.any { it.key == "characters" }
-                val rowVisible = sectionVisible && !portraitBounds.value.isEmpty &&
-                    portraitBounds.value.overlaps(contentBounds.value)
-                val layout = characterRowState.layoutInfo
-                val visible = layout.visibleItemsInfo.filter { item ->
-                    characters.getOrNull(item.index)?.name == item.key &&
-                        item.offset + item.size > layout.viewportStartOffset &&
-                        item.offset < layout.viewportEndOffset
-                }.map { it.index }
-                portraitPrefetchIndices(
-                    characters.size,
-                    visible,
-                    isVisible = rowVisible && !listState.isScrollInProgress && !characterRowState.isScrollInProgress
-                ).map { index -> characters[index].let { it.portraitUrl ?: it.imageUrl } }
-            }.collectLatest { urls ->
-                if (urls.isNotEmpty()) {
-                    delay(160)
-                    SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
-                }
-            }
-        }
-    }
 
     val surfaceColor = MaterialTheme.colorScheme.surface
 
-    // ── TopBar 滚动折叠比例（0 = 完全展开，1 = 完全折叠） ──
-    val collapsedFraction by remember {
-        derivedStateOf { scrollBehavior.state.collapsedFraction }
-    }
-    val topBarScrimAlpha by remember {
+    val topBarScrimAlpha by remember(scrollBehavior, liquidGlassEnabled) {
         derivedStateOf {
             wikiTopBarScrimAlpha(
-                progress = collapsedFraction,
+                progress = scrollBehavior.state.overlappedFraction,
                 liquidGlassEnabled = liquidGlassEnabled,
                 regularMaxAlpha = 0.78f,
                 startThreshold = 0.08f
@@ -251,8 +234,11 @@ internal fun WikiHomePage(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
-            LargeTopAppBar(
-                title = { Text("卡拉彼丘 Wiki") },
+            TopAppBar(
+                title = { Text("卡拉彼丘 Wiki", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                actions = {
+                    TextButton(onClick = { onNavigateTo(WikiRoute.Navigation) }) { Text("完整导航") }
+                },
                 navigationIcon = {
                     if (showDrawerButton) {
                         IconButton(onClick = onOpenDrawer) {
@@ -278,7 +264,7 @@ internal fun WikiHomePage(
     ) { innerPadding ->
         // LocalHasWallpaper 已由 Hub 层 provide，这里只关 overscroll
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding), contentAlignment = Alignment.TopCenter) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -286,7 +272,7 @@ internal fun WikiHomePage(
                         .fillMaxSize()
                         .onGloballyPositioned { contentBounds.value = it.boundsInWindow() },
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item(key = "hub_search", contentType = "search") {
                         HubSearchPanel(
@@ -295,15 +281,16 @@ internal fun WikiHomePage(
                             onNavigateTo = onNavigateTo,
                             factions = factions,
                             gameModes = gameModes,
-                            isIndexLoading = isLoadingCharacters || isLoadingMaps,
+                             isIndexLoading = isLoadingCharacters || isLoadingMaps,
+                             isPageActive = isPageActive,
                             backdrop = backdrop
                         )
                     }
 
                     // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            HomeSectionTitle("快捷与常用")
+                        Column {
+                            HomeSectionHeader("我的快捷入口", "编辑", "编辑我的快捷入口") { onNavigateTo(WikiRoute.QuickEntryEditor) }
                             QuickAccessGrid(
                                 onNavigateTo = onNavigateTo,
                                 backdrop = backdrop
@@ -311,164 +298,52 @@ internal fun WikiHomePage(
                         }
                     }
 
-                    item(key = "balance_data", contentType = "action_card") {
-                        ActionCard(
-                            title = "平衡数据",
-                            subtitle = "角色胜率、选取率与 KD · 官网数据",
-                            icon = Icons.Outlined.BarChart,
-                            onClick = { onNavigateTo(WikiRoute.BalanceData) },
+                    item(key = "data_links", contentType = "direct_grid") {
+                        HomeLinkGrid(dataLinks, onNavigateTo, backdrop)
+                    }
+
+                    item(key = "extraction_hub", contentType = "action_card") {
+                        DirectEntryTile(
+                            title = "弦溯战线",
+                            subtitle = "物资、装备与掉落",
+                            icon = Icons.Outlined.Explore,
+                            onClick = { onNavigateTo(WikiRoute.ExtractionHub) },
                             backdrop = backdrop
                         )
                     }
 
-                    item(key = "weapons", contentType = "action_card") {
-                        ActionCard(
-                            title = "武器一览",
-                            subtitle = "查看全部武器数据",
-                            icon = Icons.Outlined.GpsFixed,
-                            onClick = { onNavigateTo(WikiRoute.Weapons) },
-                            backdrop = backdrop
-                        )
+                    item(key = HOME_PREVIEW_KEY, contentType = "preview_section") {
+                        Column {
+                            HomeSectionHeader("资料预览", if (showMaps) "全部地图" else "全部角色", onAction = {
+                                onNavigateTo(if (showMaps) WikiRoute.Maps else WikiRoute.Characters)
+                            })
+                            HomePreviewCard(showMaps, { showMaps = it }, backdrop) {
+                                if (showMaps) {
+                                    MapPreviewSection(
+                                        gameModes, isLoadingMaps, selectedHomeMapMode, onHomeMapModeChanged,
+                                        mapRowState, modeFilterScroll, onOpenMapDetail,
+                                        sharedTransitionScope, animatedVisibilityScope
+                                    )
+                                } else {
+                                    CharacterPreviewSection(
+                                        factions, isLoadingCharacters, selectedHomeFaction, onHomeFactionChanged,
+                                        characterRowState, factionFilterScroll, onOpenCharacterDetail,
+                                         listState, contentBounds, isPageActive, sharedTransitionScope, animatedVisibilityScope
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    item(key = "preview_heading", contentType = "section_heading") {
-                        HomeSectionTitle("资料预览")
-                    }
-
-                    // ── 超弦体 & 晶源体 ──
-                    item(key = "characters", contentType = "preview_section") {
-                        CharacterPreviewSection(
-                            factions = factions,
-                            isLoading = isLoadingCharacters,
-                            selectedFaction = selectedHomeFaction,
-                            onSelectedFactionChanged = onHomeFactionChanged,
-                            rowState = characterRowState,
-                            onOpenCharacterDetail = onOpenCharacterDetail,
-                            onViewAll = { onNavigateTo(WikiRoute.Characters) },
-                            backdrop = backdrop,
-                            onPortraitBoundsChanged = { portraitBounds.value = it },
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-
-                    // ── 地图 ──
-                    item(key = "maps", contentType = "preview_section") {
-                        MapPreviewSection(
-                            gameModes = gameModes,
-                            isLoading = isLoadingMaps,
-                            selectedMode = selectedHomeMapMode,
-                            onSelectedModeChanged = onHomeMapModeChanged,
-                            rowState = mapRowState,
-                            onOpenMapDetail = onOpenMapDetail,
-                            onViewAll = { onNavigateTo(WikiRoute.Maps) },
-                            backdrop = backdrop,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-
-                    // ── 聚合入口（二级菜单页，2×2 网格与直连内容卡区分） ──
                     item(key = "hub_grid", contentType = "hub_grid") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             HomeSectionTitle("更多资料", "玩法、图鉴与游戏内容分类")
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(Modifier.weight(1f)) {
-                                    HubCard(
-                                        title = "玩法与养成",
-                                        subtitle = "角色培养、玩法系统与移动端内容",
-                                        icon = Icons.Outlined.Extension,
-                                        onClick = { onNavigateTo(WikiRoute.GameplayHub) },
-                                        backdrop = backdrop
-                                    )
-                                }
-                                Box(Modifier.weight(1f)) {
-                                    HubCard(
-                                        title = "外观与图鉴",
-                                        subtitle = "道具图鉴、时装筛选与武器外观",
-                                        icon = Icons.Outlined.Inventory2,
-                                        onClick = { onNavigateTo(WikiRoute.CatalogHub) },
-                                        backdrop = backdrop
-                                    )
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(Modifier.weight(1f)) {
-                                    HubCard(
-                                        title = "玩家装饰",
-                                        subtitle = "基板、封装、勋章、喷漆等外观装饰",
-                                        icon = Icons.Outlined.Palette,
-                                        onClick = { onNavigateTo(WikiRoute.DecorationHub) },
-                                        backdrop = backdrop
-                                    )
-                                }
-                                Box(Modifier.weight(1f)) {
-                                    HubCard(
-                                        title = "游戏延伸",
-                                        subtitle = "实用指南、剧情、历史与影音资料",
-                                        icon = Icons.Outlined.MoreHoriz,
-                                        onClick = { onNavigateTo(WikiRoute.ExtensionHub) },
-                                        backdrop = backdrop
-                                    )
-                                }
-                            }
+                            HomeLinkGrid(categoryLinks, onNavigateTo, backdrop, categoryCards = true)
                         }
                     }
 
-                    // ── 直连功能 2×2 紧凑网格（卡牌 / 活动 / 公告资讯 / 完整导航） ──
                     item(key = "direct_entries_grid", contentType = "direct_grid") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(Modifier.weight(1f).fillMaxHeight()) {
-                                    DirectEntryTile(
-                                        title = "生化卡牌",
-                                        subtitle = "图鉴与卡组",
-                                        icon = Icons.Outlined.Style,
-                                        onClick = { onNavigateTo(WikiRoute.BioCards) },
-                                        backdrop = backdrop,
-                                        modifier = Modifier.fillMaxHeight()
-                                    )
-                                }
-                                Box(Modifier.weight(1f).fillMaxHeight()) {
-                                    DirectEntryTile(
-                                        title = "活动",
-                                        subtitle = "当前与历史",
-                                        icon = Icons.Outlined.Event,
-                                        onClick = { onNavigateTo(WikiRoute.Activities) },
-                                        backdrop = backdrop,
-                                        modifier = Modifier.fillMaxHeight()
-                                    )
-                                }
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(Modifier.weight(1f).fillMaxHeight()) {
-                                    DirectEntryTile(
-                                        title = "公告资讯",
-                                        subtitle = "公告与更新",
-                                        icon = Icons.Outlined.Campaign,
-                                        onClick = { onNavigateTo(WikiRoute.Announcements) },
-                                        backdrop = backdrop,
-                                        modifier = Modifier.fillMaxHeight()
-                                    )
-                                }
-                                Box(Modifier.weight(1f).fillMaxHeight()) {
-                                    DirectEntryTile(
-                                        title = "完整导航",
-                                        subtitle = "Wiki 目录",
-                                        icon = Icons.Outlined.AccountTree,
-                                        onClick = { onNavigateTo(WikiRoute.Navigation) },
-                                        backdrop = backdrop,
-                                        modifier = Modifier.fillMaxHeight()
-                                    )
-                                }
-                            }
-                        }
+                        HomeLinkGrid(directLinks, onNavigateTo, backdrop)
                     }
 
                     // 底部留白（适配手势导航安全区）
@@ -487,9 +362,65 @@ internal fun WikiHomePage(
 @Composable
 private fun HomeSectionTitle(title: String, description: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(title, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (!description.isNullOrBlank()) {
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun HomeSectionHeader(title: String, action: String, actionDescription: String = action, onAction: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { HomeSectionTitle(title) }
+        TextButton(onClick = onAction) {
+            Text(action, Modifier.clearAndSetSemantics { contentDescription = actionDescription })
+        }
+    }
+}
+
+private data class HomeLink(val title: String, val subtitle: String, val icon: ImageVector, val route: WikiRoute)
+
+private val dataLinks = listOf(
+    HomeLink("平衡数据", "官网胜率、选取率与 KD", Icons.Outlined.BarChart, WikiRoute.BalanceData),
+    HomeLink("武器一览", "武器分类与数据", Icons.Outlined.GpsFixed, WikiRoute.Weapons)
+)
+private val categoryLinks = listOf(
+    HomeLink("玩法与养成", "角色培养、玩法系统与移动端内容", Icons.Outlined.Extension, WikiRoute.GameplayHub),
+    HomeLink("外观与图鉴", "道具图鉴、时装筛选与武器外观", Icons.Outlined.Inventory2, WikiRoute.CatalogHub),
+    HomeLink("玩家装饰", "基板、封装、勋章、喷漆等外观装饰", Icons.Outlined.Palette, WikiRoute.DecorationHub),
+    HomeLink("游戏延伸", "实用指南、剧情、历史与影音资料", Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub)
+)
+private val directLinks = listOf(
+    HomeLink("生化卡牌", "图鉴与卡组", Icons.Outlined.Style, WikiRoute.BioCards),
+    HomeLink("活动", "当前与历史", Icons.Outlined.Event, WikiRoute.Activities),
+    HomeLink("公告资讯", "公告与更新", Icons.Outlined.Campaign, WikiRoute.Announcements)
+)
+
+@Composable
+private fun HomeLinkGrid(
+    links: List<HomeLink>,
+    onNavigateTo: (WikiRoute) -> Unit,
+    backdrop: Backdrop,
+    categoryCards: Boolean = false
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val columns = if (maxWidth >= 308.dp * fontScale) 2 else 1
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            links.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { link ->
+                        val tile = Modifier.weight(1f).fillMaxHeight()
+                        val open = { onNavigateTo(link.route) }
+                        if (categoryCards) {
+                            HubCard(link.title, link.subtitle, link.icon, open, tile, backdrop)
+                        } else {
+                            DirectEntryTile(link.title, link.subtitle, link.icon, open, tile, backdrop)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -500,6 +431,7 @@ private fun HubCard(
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
@@ -517,7 +449,7 @@ private fun HubCard(
             }
         ),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .liquidGlass(
                 backdrop = backdrop,
@@ -547,9 +479,7 @@ private fun HubCard(
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -586,6 +516,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("bgm", "BGM", Icons.Outlined.MusicNote, WikiRoute.Bgm),
     QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiRoute.BalanceData),
     QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiRoute.GameplayHub),
+    QuickEntry("extraction_hub", "弦溯战线", Icons.Outlined.Explore, WikiRoute.ExtractionHub),
     QuickEntry("decorations", "装饰", Icons.Outlined.Palette, WikiRoute.DecorationHub),
     QuickEntry("extension_hub", "延伸", Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub),
     QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiRoute.Wallpapers),
@@ -635,15 +566,16 @@ private fun DirectEntryTile(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = CircleShape,
                 color = accent.copy(alpha = 0.12f),
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -659,17 +591,13 @@ private fun DirectEntryTile(
                     title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = contentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = contentColor
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -688,7 +616,7 @@ private fun QuickAccessGrid(
     val layout by AppPrefs.homeQuickEntryLayoutState.collectAsState()
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth >= 600.dp) 6 else 3
+        val columns = quickEntryColumns(maxWidth, LocalDensity.current.fontScale)
         if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
             QuickAccessButtonGrid(
                 quickEntries = quickEntries,
@@ -704,6 +632,16 @@ private fun QuickAccessGrid(
                 backdrop = backdrop
             )
         }
+    }
+}
+
+internal fun quickEntryColumns(maxWidth: Dp, fontScale: Float): Int {
+    val cellWidth = 66.dp * fontScale.coerceAtLeast(1f) + 12.dp
+    return when {
+        maxWidth >= maxOf(600.dp, cellWidth * 6) -> 6
+        maxWidth >= cellWidth * 3 -> 3
+        maxWidth >= cellWidth * 2 -> 2
+        else -> 1
     }
 }
 
@@ -761,7 +699,7 @@ private fun QuickAccessGridCard(
                             Spacer(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(70.dp)
+                                    .height(56.dp)
                             )
                         }
                         if (columnIndex < columns - 1) {
@@ -813,7 +751,8 @@ private fun QuickAccessButtonGrid(
                         onClick = { entry.targetRoute?.let(onNavigateTo) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp)
+                            .heightIn(min = 60.dp)
+                            .semantics { role = Role.Button }
                             .liquidGlassLight(
                                 backdrop = backdrop,
                                 shape = { entryShape }
@@ -823,7 +762,7 @@ private fun QuickAccessButtonGrid(
                         contentColor = contentColor
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -838,8 +777,7 @@ private fun QuickAccessButtonGrid(
                                 entry.label,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -860,10 +798,11 @@ private fun QuickAccessCell(
 ) {
     Column(
         modifier = modifier
-            .height(70.dp)
+            .heightIn(min = 56.dp)
             .padding(3.dp)
             .clip(cellShape)
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -878,51 +817,44 @@ private fun QuickAccessCell(
             entry.label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            textAlign = TextAlign.Center
         )
     }
 }
 
-private fun List<String>.resolveQuickEntries(): List<QuickEntry> {
-    val sourceIds = ifEmpty { defaultQuickEntryIds }
-    val selectedEntries = sourceIds.mapNotNull(quickEntryById::get)
-    val selectedIds = selectedEntries.mapTo(mutableSetOf()) { it.id }
-    val fallbackEntries = allQuickEntries.filterNot { it.id in selectedIds }
-    return (selectedEntries + fallbackEntries).take(6)
+internal fun List<String>.resolveQuickEntries(): List<QuickEntry> {
+    val selected = distinct().mapNotNull(quickEntryById::get)
+        .ifEmpty { defaultQuickEntryIds.map(quickEntryById::getValue) }
+    // Old partial configurations filled spare slots in catalog order. The new topic is opt-in.
+    return (selected + allQuickEntries.filterNot { it.targetRoute == WikiRoute.ExtractionHub })
+        .distinctBy(QuickEntry::id).take(6)
 }
 
 // ────────────────────────────────────────────
 //  角色预览区（横向滚动立绘卡片）
 // ────────────────────────────────────────────
 
+private const val HOME_PREVIEW_KEY = "home_preview"
+
 @Composable
-private fun CharacterPreviewSection(
-    factions: List<CharacterListApi.FactionData>,
-    isLoading: Boolean,
-    selectedFaction: Int,
-    onSelectedFactionChanged: (Int) -> Unit,
-    rowState: LazyListState,
-    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
-    onViewAll: () -> Unit,
-    backdrop: Backdrop = emptyBackdrop(),
-    onPortraitBoundsChanged: (Rect) -> Unit = {},
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null
+private fun HomePreviewCard(
+    showMaps: Boolean,
+    onShowMapsChanged: (Boolean) -> Unit,
+    backdrop: Backdrop,
+    content: @Composable () -> Unit
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
-    val charCardShape = AppShapes.card
-    val btnShape = smoothCornerShape(20.dp)
+    val shape = AppShapes.card
     val onSurface = MaterialTheme.colorScheme.onSurface
     Card(
-        shape = charCardShape,
+        shape = shape,
         modifier = Modifier
             .fillMaxWidth()
             .liquidGlass(
                 backdrop = backdrop,
-                shape = { charCardShape },
+                shape = { shape },
                 surfaceAlpha = 0.3f
             ),
         colors = when {
@@ -940,129 +872,135 @@ private fun CharacterPreviewSection(
             )
         }
     ) {
-        Column(Modifier.padding(16.dp)) {
-            // 标题行
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Outlined.People,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "超弦体 & 晶源体",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                FilledTonalButton(
-                    onClick = onViewAll,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    shape = btnShape
-                ) {
-                    Text("查看全部", style = MaterialTheme.typography.labelMedium)
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                repeat(2) { index ->
+                    val maps = index == 1
+                    SegmentedButton(
+                        selected = showMaps == maps,
+                        onClick = { onShowMapsChanged(maps) },
+                        shape = SegmentedButtonDefaults.itemShape(index, 2)
+                    ) { Text(if (maps) "地图" else "角色") }
                 }
             }
+            content()
+        }
+    }
+}
 
-            Spacer(Modifier.height(12.dp))
+@Composable
+private fun CharacterPreviewSection(
+    factions: List<CharacterListApi.FactionData>,
+    isLoading: Boolean,
+    selectedFaction: Int,
+    onSelectedFactionChanged: (Int) -> Unit,
+    rowState: LazyListState,
+    filterScroll: ScrollState,
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    listState: LazyListState,
+    contentBounds: State<Rect>,
+    prefetchEnabled: Boolean,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?
+) {
+    if (factions.isEmpty()) {
+        if (isLoading) {
+            ShimmerBox(Modifier.fillMaxWidth().height(40.dp), shape = AppShapes.capsule)
+            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(4) { ShimmerBox(Modifier.width(90.dp).aspectRatio(5f / 12f), shape = AppShapes.compactCard) }
+            }
+        } else PreviewMessage("加载失败")
+        return
+    }
 
-            // 阵营切换
-            if (factions.isNotEmpty()) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    factions.forEachIndexed { index, faction ->
-                        SegmentedButton(
-                            selected = selectedFaction == index,
-                            onClick = { onSelectedFactionChanged(index) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = factions.size
-                            ),
-                            icon = {}
-                        ) {
-                            Text(
-                                faction.faction,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
+    val currentIndex = selectedFaction.coerceIn(0, factions.lastIndex)
+    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        factions.forEachIndexed { index, faction ->
+            FilterChip(selected = currentIndex == index, onClick = { onSelectedFactionChanged(index) },
+                label = { Text(faction.faction, style = MaterialTheme.typography.labelMedium) })
+        }
+    }
+    val faction = factions[currentIndex]
+    if (faction.characters.isEmpty()) {
+        PreviewMessage(if (faction.loadError != null) "该阵营加载失败，可进入角色一览重试" else "暂无角色数据")
+        return
+    }
+    val factionColor = when (faction.faction) {
+        "欧泊" -> Color(0xFF4B77DC)
+        "剪刀手" -> Color(0xFFBC3B47)
+        "乌尔比诺" -> Color(0xFFDEB639)
+        "晶源体" -> Color(0xFF8B5CF6)
+        else -> null
+    }
+    val portraitBounds = remember(faction.faction) { mutableStateOf(Rect.Zero) }
+    LazyRow(
+        state = rowState,
+        modifier = Modifier.onGloballyPositioned { portraitBounds.value = it.boundsInWindow() },
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp)
+    ) {
+        items(faction.characters, key = { it.name }) { character ->
+            CharacterPortraitCard(
+                character, factionColor, { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
+                sharedTransitionScope, animatedVisibilityScope
+            )
+        }
+    }
+    if (prefetchEnabled) {
+        val context = LocalContext.current
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        val routeTransition = animatedVisibilityScope?.transition
+        val characters = faction.characters
+        LaunchedEffect(characters, listState, rowState, portraitBounds, lifecycle, routeTransition, sharedTransitionScope, context) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                snapshotFlow {
+                    if (listState.isScrollInProgress || rowState.isScrollInProgress ||
+                        listState.layoutInfo.visibleItemsInfo.none { it.key == HOME_PREVIEW_KEY } ||
+                        !isSettledPortraitViewport(
+                            viewport = contentBounds.value,
+                            portraits = portraitBounds.value,
+                            current = routeTransition?.currentState,
+                            target = routeTransition?.targetState,
+                            animating = routeTransition?.isRunning == true || sharedTransitionScope?.isTransitionActive == true
+                        )
+                    ) return@snapshotFlow emptyList()
 
-                Spacer(Modifier.height(14.dp))
-
-                // 角色横向滚动
-                val currentFaction = factions.getOrNull(selectedFaction.coerceIn(0, factions.lastIndex))
-                if (currentFaction != null) {
-                    // 阵营色（用于卡片背景）
-                    val factionBaseColor = remember(currentFaction.faction) {
-                        when (currentFaction.faction) {
-                            "欧泊" -> Color(0xFF4B77DC)
-                            "剪刀手" -> Color(0xFFBC3B47)
-                            "乌尔比诺" -> Color(0xFFDEB639)
-                            "晶源体" -> Color(0xFF8B5CF6)
-                            else -> null
-                        }
+                    val layout = rowState.layoutInfo
+                    val visible = layout.visibleItemsInfo.filter { item ->
+                        characters.getOrNull(item.index)?.name == item.key &&
+                            item.offset + item.size > layout.viewportStartOffset && item.offset < layout.viewportEndOffset
+                    }.map { it.index }
+                    portraitPrefetchIndices(characters.size, visible).map { index ->
+                        characters[index].let { it.portraitUrl ?: it.imageUrl }
                     }
-                    LazyRow(
-                        state = rowState,
-                        modifier = Modifier.onGloballyPositioned { onPortraitBoundsChanged(it.boundsInWindow()) },
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 2.dp)
-                    ) {
-                        items(currentFaction.characters, key = { it.name }) { character ->
-                            CharacterPortraitCard(
-                                character = character,
-                                factionBaseColor = factionBaseColor,
-                                onClick = { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
+                }.collectLatest { urls ->
+                    if (urls.isNotEmpty()) {
+                        delay(160)
+                        SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
                     }
-                }
-            } else if (isLoading) {
-                // 骨架与阵营分段栏 + 5:12 立绘行比例对齐，加载完成后不跳高度，且不溢出窄屏
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    ShimmerBox(
-                        modifier = Modifier.fillMaxWidth().height(40.dp),
-                        shape = AppShapes.capsule
-                    )
-                    LazyRow(
-                        userScrollEnabled = false,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 2.dp)
-                    ) {
-                        items(4) {
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .width(90.dp)
-                                    .aspectRatio(5f / 12f),
-                                shape = AppShapes.compactCard
-                            )
-                        }
-                    }
-                }
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("加载失败", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
-/** 角色立绘卡片 —— 完整显示立绘，底部渐变叠加角色名 */
+// AnimatedContent retains outgoing and predictive-back pages with valid old layout bounds.
+internal fun isSettledPortraitViewport(
+    viewport: Rect, portraits: Rect, current: EnterExitState?, target: EnterExitState?, animating: Boolean
+): Boolean {
+    val stableRoute = (current == null && target == null) ||
+        (current == EnterExitState.Visible && target == EnterExitState.Visible)
+    return stableRoute && !animating && !viewport.isEmpty && !portraits.isEmpty && viewport.overlaps(portraits)
+}
+
+@Composable
+private fun PreviewMessage(message: String) {
+    Box(Modifier.fillMaxWidth().heightIn(min = 80.dp), contentAlignment = Alignment.Center) {
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** 角色立绘卡片，底部色带随名字换行增高。 */
 @Composable
 private fun CharacterPortraitCard(
     character: CharacterListApi.CharacterInfo,
@@ -1076,9 +1014,8 @@ private fun CharacterPortraitCard(
         wikiPortraitRequest(context, character.portraitUrl ?: character.imageUrl, crossfade = false)
     }
     val cardShape = AppShapes.compactCard
-    // 阵营色淡色背景，无阵营色时使用默认表面色
     val cardBgColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
-    val gradientColor = factionBaseColor?.copy(alpha = 0.72f) ?: Color.Black.copy(alpha = 0.7f)
+    val captionColor = lerp(Color.Black, factionBaseColor ?: Color.Black, 0.18f).copy(alpha = 0.88f)
 
     Card(
         onClick = onClick,
@@ -1108,42 +1045,25 @@ private fun CharacterPortraitCard(
             ) {
                 AsyncImage(
                     model = portraitRequest,
-                    contentDescription = character.name,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     alignment = BiasAlignment(0f, -0.85f),
                     modifier = Modifier.fillMaxSize()
                 )
             }
 
-            // 底部渐变 + 角色名
-            Box(
+            Text(
+                text = character.name,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(40.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                gradientColor
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Text(
-                    text = character.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                )
-            }
+                    .background(captionColor)
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+            )
         }
     }
 }
@@ -1159,169 +1079,47 @@ private fun MapPreviewSection(
     selectedMode: Int,
     onSelectedModeChanged: (Int) -> Unit,
     rowState: LazyListState,
+    filterScroll: ScrollState,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
-    onViewAll: () -> Unit = {},
-    backdrop: Backdrop = emptyBackdrop(),
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
+    if (gameModes.isEmpty()) {
+        if (isLoading) {
+            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(4) { ShimmerBox(Modifier.width(68.dp).height(32.dp), shape = AppShapes.chip) }
+            }
+            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(2) { ShimmerBox(Modifier.width(220.dp).aspectRatio(16f / 9f), shape = AppShapes.compactCard) }
+            }
+        } else PreviewMessage("加载失败")
+        return
+    }
 
-    val mapCardShape = AppShapes.card
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    Card(
-        shape = mapCardShape,
-        modifier = Modifier
-            .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { mapCardShape },
-                surfaceAlpha = 0.3f
-            ),
-        colors = when {
-            liquidGlass -> CardDefaults.cardColors(
-                containerColor = Color.Transparent, contentColor = onSurface
-            )
-
-            hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
-                contentColor = onSurface
-            )
-
-            else -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
+    val currentIndex = selectedMode.coerceIn(0, gameModes.lastIndex)
+    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        gameModes.forEachIndexed { index, mode ->
+            FilterChip(selected = currentIndex == index, onClick = { onSelectedModeChanged(index) },
+                label = { Text(mode.displayName, style = MaterialTheme.typography.labelMedium) })
         }
+    }
+    val mode = gameModes[currentIndex]
+    if (mode.maps.isEmpty()) {
+        PreviewMessage(if (mode.loadError != null) "该模式加载失败，可进入地图一览重试" else "暂无地图数据")
+        return
+    }
+    LazyRow(
+        state = rowState,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            // 标题行
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Outlined.Map,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "地图",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                FilledTonalButton(
-                    onClick = onViewAll,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    shape = smoothCornerShape(20.dp)
-                ) {
-                    Text("查看全部", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            if (gameModes.isNotEmpty()) {
-                // 模式切换（横向滚动 FilterChip）
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    gameModes.forEachIndexed { index, mode ->
-                        FilterChip(
-                            selected = selectedMode == index,
-                            onClick = { onSelectedModeChanged(index) },
-                            shape = smoothCornerShape(12.dp),
-                            label = {
-                                Text(
-                                    mode.displayName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1
-                                )
-                            }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // 地图横向滚动
-                val currentMode = gameModes.getOrNull(selectedMode.coerceIn(0, gameModes.lastIndex))
-                if (currentMode != null && currentMode.maps.isNotEmpty()) {
-                    LazyRow(
-                        state = rowState,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 2.dp)
-                    ) {
-                        items(currentMode.maps, key = { it.name }) { map ->
-                            MapCard(
-                                map = map,
-                                onClick = { onOpenMapDetail(map.name, map.imageUrl) },
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    }
-                } else if (currentMode != null) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(80.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(currentMode.loadError?.let { "该模式加载失败，可进入地图一览重试" } ?: "暂无地图数据",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            } else if (isLoading) {
-                // 骨架与模式筛选栏 + 16:9 地图横滑卡片比例对齐，且不溢出窄屏
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LazyRow(
-                        userScrollEnabled = false,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(4) {
-                            ShimmerBox(
-                                modifier = Modifier.width(68.dp).height(32.dp),
-                                shape = AppShapes.chip
-                            )
-                        }
-                    }
-                    LazyRow(
-                        userScrollEnabled = false,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 2.dp)
-                    ) {
-                        items(2) {
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .width(220.dp)
-                                    .aspectRatio(16f / 9f),
-                                shape = AppShapes.compactCard
-                            )
-                        }
-                    }
-                }
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(80.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("加载失败", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+        items(mode.maps, key = { it.name }) { map ->
+            MapCard(map, { onOpenMapDetail(map.name, map.imageUrl) }, sharedTransitionScope, animatedVisibilityScope)
         }
     }
 }
 
-/** 地图卡片 —— 16:9 图片 + 底部渐变叠加地图名 */
+/** 首页地图卡片，16:9 图片与可换行的名称。 */
 @Composable
 private fun MapCard(
     map: MapInfo,
@@ -1355,7 +1153,7 @@ private fun MapCard(
             if (!map.imageUrl.isNullOrBlank() && !imageFailed) {
                 AsyncImage(
                     model = map.imageUrl,
-                    contentDescription = map.name,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     onError = { imageFailed = true },
                     modifier = Modifier
@@ -1379,25 +1177,17 @@ private fun MapCard(
                 }
             }
 
-            // 底部渐变 + 地图名
-            Box(
+            Text(
+                text = map.name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .background(mapGradient),
-                contentAlignment = Alignment.BottomStart
-            ) {
-                Text(
-                    text = map.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                )
-            }
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            )
         }
     }
 }
@@ -1612,16 +1402,12 @@ internal fun MapListFullScreen(
     error: String? = null,
     offlineAge: Long? = null,
     onRetry: () -> Unit = {},
-    initialTab: Int = 0,
-    onTabChanged: ((Int) -> Unit)? = null,
+    selectedTab: Int,
+    onTabChanged: (Int) -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    var selectedMode by remember { mutableIntStateOf(initialTab) }
-    // 模式数变少时回退选中项，避免“暂无地图”误报
-    LaunchedEffect(gameModes) {
-        if (selectedMode > gameModes.lastIndex) selectedMode = gameModes.lastIndex.coerceAtLeast(0)
-    }
+    val selectedMode = selectedTab.coerceIn(0, gameModes.lastIndex.coerceAtLeast(0))
     val hasWallpaper = LocalHasWallpaper.current
     val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 
@@ -1691,10 +1477,7 @@ internal fun MapListFullScreen(
                             gameModes.forEachIndexed { index, mode ->
                                 FilterChip(
                                     selected = selectedMode == index,
-                                    onClick = {
-                                        selectedMode = index
-                                        onTabChanged?.invoke(index)
-                                    },
+                                     onClick = { onTabChanged(index) },
                                     shape = smoothCornerShape(12.dp),
                                     label = { Text(mode.displayName, maxLines = 1) }
                                 )

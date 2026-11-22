@@ -43,7 +43,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,13 +108,13 @@ enum class CacheCategory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun StorageSettingsScreen(
-    snapshot: StorageSnapshot?,
-    isCalculating: Boolean,
-    onRefreshSnapshot: () -> Unit,
-    onBack: () -> Unit
-) {
+internal fun StorageSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val savePath = remember { AppPrefs.savePath }
+    var revision by remember { mutableIntStateOf(0) }
+    var snapshot by remember(revision) { mutableStateOf<StorageSnapshot?>(null) }
+    val isCalculating = snapshot == null
+    LaunchedEffect(savePath, revision) { snapshot = computeStorageSnapshot(context, savePath) }
     val scope = rememberCoroutineScope()
     val showSnack = rememberSnackbarLauncher()
     var clearingCategory by remember { mutableStateOf<CacheCategory?>(null) }
@@ -234,7 +236,7 @@ internal fun StorageSettingsScreen(
                                     clearingCategory = category
                                     clearCache(context, category)
                                     clearingCategory = null
-                                    onRefreshSnapshot()
+                                    revision++
                                     showSnack(if (category == CacheCategory.WEBVIEW) "已清理网页缓存，使用时会重新生成" else "${category.title}已清除")
                                 }
                             }
@@ -289,7 +291,7 @@ internal fun StorageSettingsScreen(
                             }
                             isClearingAll = false
                             showClearAllConfirm = false
-                            onRefreshSnapshot()
+                            revision++
                             showSnack("已清理缓存，使用过程中会重新生成")
                         }
                     },

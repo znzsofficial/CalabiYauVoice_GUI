@@ -16,13 +16,13 @@ import com.nekolaska.calabiyau.core.ui.*
 
 /** Modes initially show only their inset, collapsed header. */
 @Composable
-internal fun GameModeSkeleton(modifier: Modifier = Modifier) {
+internal fun GameModeSkeleton(modifier: Modifier = Modifier, count: Int = 5) {
     LazyColumn(
         modifier = modifier.fillMaxSize().semantics { contentDescription = "正在加载模式信息" },
         contentPadding = PaddingValues(horizontal = AppSpacing.screen, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
     ) {
-        items(5) {
+        items(count) {
             Card(
                 shape = AppShapes.sheet,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)

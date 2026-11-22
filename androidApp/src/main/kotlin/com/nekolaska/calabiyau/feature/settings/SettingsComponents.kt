@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -136,6 +137,22 @@ internal fun SettingsSingleChoiceDialog(
             TextButton(onClick = onDismissRequest) { Text("关闭") }
         }
     )
+}
+
+@Composable
+internal fun SettingsCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen),
+        shape = AppShapes.card,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column { content() }
+    }
+}
+
+@Composable
+internal fun SettingsDivider() {
+    HorizontalDivider(Modifier.padding(horizontal = AppSpacing.screen))
 }
 
 @Composable

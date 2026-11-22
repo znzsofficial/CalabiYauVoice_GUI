@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -38,31 +39,28 @@ internal fun LazyListScope.extractionDropPoolSection(
                     role = Role.Button,
                     onClickLabel = if (expanded) "收起物品" else "展开全部物品",
                     onClick = onToggle
-                ).semantics { stateDescription = if (expanded) "已展开" else "显示前 8 件" } else Modifier),
+                ).semantics { stateDescription = if (expanded) "已展开" else "显示前 8 项" } else Modifier),
             shape = AppShapes.compactCard,
             color = MaterialTheme.colorScheme.surfaceContainer,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
-            Row(
+            FlowRow(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                ExtractionDropQualityBadge(label = group.label, code = group.qualityCode ?: -1)
+                Box(Modifier.align(Alignment.CenterVertically)) { ExtractionDropQualityBadge(label = group.label, code = group.qualityCode ?: -1) }
                 Text(
-                    "${group.items.size} 件物品",
-                    Modifier.weight(1f),
+                    "${group.items.size} 项候选物品",
+                    Modifier.align(Alignment.CenterVertically),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 if (canExpand) {
-                    Text(
-                        if (expanded) "收起" else "展开全部",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.primary)
+                    Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (expanded) "收起" else "展开全部", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
@@ -92,10 +90,11 @@ internal fun ExtractionDetailItemRow(
     name: String, qualityLabel: String, qualityCode: Int, imageUrl: String?, onClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
+    val focus = LocalFocusManager.current
     Surface(
         modifier = modifier.fillMaxWidth()
             .then(if (onClick == null) Modifier else Modifier.clickable(
-                role = Role.Button, onClickLabel = "查找$name 的掉落来源", onClick = onClick
+                role = Role.Button, onClickLabel = "查看物品来源", onClick = { focus.clearFocus(); onClick() }
             )),
         shape = AppShapes.compactCard,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -107,23 +106,11 @@ internal fun ExtractionDetailItemRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ExtractionDropThumbnail(
-                name = name, qualityLabel = qualityLabel, qualityCode = qualityCode,
-                imageUrl = imageUrl, modifier = Modifier.size(48.dp)
+                qualityCode = qualityCode, imageUrl = imageUrl, modifier = Modifier.size(48.dp)
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (qualityLabel.isNotBlank()) ExtractionDropQualityBadge(label = qualityLabel, code = qualityCode)
-                    if (onClick != null) Text(
-                        "查来源",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                if (qualityLabel.isNotBlank()) ExtractionDropQualityBadge(label = qualityLabel, code = qualityCode)
             }
             if (onClick != null) Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,

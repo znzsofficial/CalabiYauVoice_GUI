@@ -37,7 +37,7 @@ Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`ht
 `auth.js` 负责 Wiki/管理员鉴权及访客 HMAC，`identity.js` 负责已验证名字别名及旧行归属补全，`writes.js` 负责原子写入门禁，
 `profiles.js`、`avatars.js`、`comments.js`、`likes.js`、`admin.js` 处理账号及管理业务，`usage.js` 处理独立的安装日统计与归档，
 `releases.js` 负责 APK Range/HEAD/ETag，`proxy.js` 负责上游代理。
-`pnpm build` 使用 esbuild 将模块打包为 `dist/_worker.js`；`webStatic` 不再覆盖此产物。
+Wiki API、平衡性上游地址或文件下载域名白名单有变时，同时更新生产代理（`downloadPage/src/api/proxy.js`、`auth.js`）和本地代理（`downloadPage/vite.config.ts`）。Vite 开发服务器不提供 R2 APK；发布时的 Worker 打包与静态文件复制见[站点构建](release-version-checklist.md#site-build)。
 
 ## 2. 云资源与配置
 
@@ -52,7 +52,7 @@ Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`ht
 
 配置见 `downloadPage/wrangler.jsonc`（含 `migrations_dir: ./migrations`）。
 
-密钥在 Pages 项目 `calabiyauwiki` 的生产环境管理，不写入 Git。常规部署保留现有 `GUEST_SECRET`；轮换会改变访客编号，也会中断统计的跨日去重与留存关联。
+密钥在 Pages 项目 `calabiyauwiki` 的生产环境管理，不写入 `wrangler.jsonc`。不要提交从控制台下载的 `downloadPage/wrangler.toml`：它可能包含密钥，已由 Git 忽略。常规部署保留现有 `GUEST_SECRET`；轮换会改变访客编号，也会中断统计的跨日去重与留存关联。
 
 ## 3. 数据库结构
 
@@ -146,8 +146,7 @@ CREATE TABLE write_throttle (
   归档是资料元数据备份，不是 R2 文件备份；不用的头像仍遵循既有孤儿清理规则。
 - 匿名身份判定是 `author_wiki_user_id IS NULL AND author_bid='anon'`，不能仅凭字符串判定。
   BID 兼容授权和旧留言档案关联均排除匿名占位，真实同名账号只可操作其 Wiki ID 所属留言。
-- **部署前先备份 D1，检查重复 Wiki ID 与名字冲突，再应用 0010；随后部署新版 Worker，最后发布客户端。**
-  迁移中的归档/合并已在本地 D1 回归验证，不代表已经操作线上数据库。名字冲突应由管理员核对，不能直接改写归属 ID。
+- **在尚未应用 0010 的环境，先备份 D1，检查重复 Wiki ID 与名字冲突，再应用迁移；随后部署 Worker，最后发布客户端。** 名字冲突应由管理员核对，不能直接改写归属 ID。生产库已应用 0010，见[2.1.21 发布记录](releases/2.1.21.md#兼容性与边界)。
 
 ### 0011–0012 — 匿名使用统计
 
@@ -347,12 +346,13 @@ PUT 请求体：
 - 侧栏 `WikiAccountState` 按 Cookie 和代数隔离身份、档案响应；切换账号会关闭旧编辑窗口。
   资料加载失败不等于“未建档”，需载入成功后才可打开编辑，编辑时固定资料快照避免刷新清空输入。
   保存成功会使在途旧档案读取失效，身份临时请求失败可在 20 秒退避后重试。
+- 账号读取缓存随写入失效，不能只等 TTL：`CustomUserApi.updateProfile` 保存成功后清空 60 秒的 `profileCache` 并递增代数，旧读取不能回填；Android `WikiAuthHelper.syncResponseCookies` 处理响应 Cookie 后清空 500 毫秒的 `cookieMemo`。Cookie 回写资格见 [Cookie 会话边界](android-webview-auth.md#cookie-会话边界)。
 - 桌面端编辑窗口固定 Wiki ID；导入新账号时关闭旧窗口。上传/保存前重新验证身份，并向保存接口发送
   `expectedWikiUserId`；旧账号操作完成后不能把结果写入新账号 UI。
 
 ## 8. 部署与运维
 
-在 `downloadPage/` 下用 `pnpm exec wrangler d1 migrations list calabiyau-db --remote` 核对生产库待迁移清单。[2.2.4 的生产记录](releases/2.2.4.md#部署记录)已确认 `0011`、`0012` 上线；新环境需按顺序应用[迁移目录](../downloadPage/migrations/)中的脚本。
+在 `downloadPage/` 下用 `pnpm exec wrangler d1 migrations list calabiyau-db --remote` 核对生产库待迁移清单。新环境需按顺序应用[迁移目录](../downloadPage/migrations/)中的脚本；统计迁移的上线顺序与生产记录见[统计专题](app-usage.md#d1-和上线顺序)。
 
 若本次发布依赖新迁移，先备份数据库（`d1 export` 的输出放在仓库外）；涉及 `0010` 时先按上面的身份冲突规则核对旧数据。确认待应用项后，执行 `pnpm exec wrangler d1 migrations apply calabiyau-db --remote`，确认成功且生产密钥已配置，再从项目根目录运行 `.\gradlew.bat webPush`。一并发布 Android 时遵循[版本发布清单](release-version-checklist.md)。
 

@@ -22,8 +22,9 @@ import kotlinx.coroutines.coroutineScope
  */
 object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
 
+    val EXTRACTION_MODE = ModeEntry("弦溯战线", EXTRACTION_MODE_PAGE)
     val MODES = listOf(
-        ModeEntry("弦溯战线", EXTRACTION_MODE_PAGE),
+        EXTRACTION_MODE,
         ModeEntry("一般爆破", "战斗模式/一般爆破"),
         ModeEntry("团队乱斗", "战斗模式/团队乱斗"),
         ModeEntry("排位爆破", "战斗模式/排位爆破"),
@@ -40,11 +41,14 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
         ModeEntry("炸弹派对", "战斗模式/炸弹派对"),
     )
 
-    suspend fun fetchAllModes(
+    suspend fun fetchModes(
+        focusedMode: ModeEntry? = null,
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
     ): ApiResult<List<GameModeDetail>> {
+        // A single-page response must never replace the all-modes memory snapshot.
+        if (focusedMode != null) return fetchFromSource(forceRefresh, cacheOnly, focusedMode)
         return fetch(
             forceRefresh = forceRefresh,
             cacheOnly = cacheOnly,
@@ -59,13 +63,15 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
 
     private suspend fun fetchFromSource(
         forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false
+        cacheOnly: Boolean = false,
+        focusedMode: ModeEntry? = null
     ): ApiResult<List<GameModeDetail>> =
         ioApiCall("获取游戏模式失败") {
-            val modeMapMapping = fetchModeMapMapping(forceRefresh, cacheOnly)
+            // The extraction article declares its maps; opening its introduction needs only this page.
+            val modeMapMapping = if (focusedMode == EXTRACTION_MODE) emptyMap() else fetchModeMapMapping(forceRefresh, cacheOnly)
 
             val results = coroutineScope {
-                MODES.map { mode ->
+                (focusedMode?.let(::listOf) ?: MODES).map { mode ->
                     async { fetchMode(mode, modeMapMapping, forceRefresh, cacheOnly) }
                 }.awaitAll()
             }

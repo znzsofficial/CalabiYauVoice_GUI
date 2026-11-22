@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
+import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
@@ -35,28 +37,30 @@ import androidx.compose.runtime.saveable.rememberSaveable
 fun GameModeScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
-    onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)? = null
+    onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)? = null,
+    focusedMode: ModeEntry? = null
 ) {
     val state = rememberLoadState(
         initial = emptyList<GameModeDetail>(),
+        key = focusedMode,
         cachedPrefetchDelayMs = 300L,
-        cachedFetch = { GameModeApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) }
+        cachedFetch = { GameModeApi.fetchModes(focusedMode, cacheOnly = true) },
+        fetch = { force -> GameModeApi.fetchModes(focusedMode, forceRefresh = force, allowMemoryCache = false) }
     )
     var expandedMode by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("战斗模式", fontWeight = FontWeight.Bold) },
+                title = { Text(if (focusedMode == null) "战斗模式" else "模式介绍", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
                     OpenWikiActionButton(
-                        wikiUrl = "https://wiki.biligame.com/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F",
+                        wikiUrl = extractionArticleUrl(focusedMode?.pageName ?: "战斗模式"),
                         onOpenWikiUrl = onOpenWikiUrl,
-                        contentDescription = "在浏览器中打开"
+                        contentDescription = "查看 Wiki 原文"
                     )
                 }
             )
@@ -64,9 +68,18 @@ fun GameModeScreen(
     ) { innerPadding ->
         ApiResourceContent(
             state = state,
-            modifier = Modifier.padding(innerPadding),
-            loading = { mod -> GameModeSkeleton(mod) }
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
+            loading = { mod -> if (focusedMode != null) ModeReaderSkeleton(mod) else GameModeSkeleton(mod) }
         ) { modes ->
+            if (focusedMode != null) {
+                modes.firstOrNull { it.name == focusedMode.displayName }?.let { mode ->
+                    ModeReader(mode, onMap = { name ->
+                        if (onOpenMapDetail != null) onOpenMapDetail(name, null)
+                        else onOpenWikiUrl("https://wiki.biligame.com/klbq/${name.wikiPathEncode()}")
+                    })
+                }
+                return@ApiResourceContent
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),

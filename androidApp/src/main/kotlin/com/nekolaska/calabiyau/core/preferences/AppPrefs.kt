@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.os.Environment
 import java.io.File
 import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -43,8 +45,8 @@ object AppPrefs {
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
     private lateinit var wallpaperPreference: ObservablePreference<String?>
-    private lateinit var homeQuickEntryIdsPreference: ObservablePreference<List<String>>
-    private lateinit var homeQuickEntryLayoutPreference: ObservablePreference<Int>
+    private val quickEntryIds = MutableStateFlow<List<String>>(emptyList())
+    private val quickEntryLayout = MutableStateFlow(HOME_QUICK_LAYOUT_GRID)
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -52,18 +54,12 @@ object AppPrefs {
         wallpaperPreference = ObservablePreference(prefs.getString("wallpaperUrl", null)) { value ->
             prefs.edit { putString("wallpaperUrl", value) }
         }
-        homeQuickEntryIdsPreference = ObservablePreference(readHomeQuickEntryIds()) { value ->
-            prefs.edit { putString("homeQuickEntryIds", value.take(6).joinToString("|||")) }
-        }
-        homeQuickEntryLayoutPreference = ObservablePreference(readHomeQuickEntryLayout()) { value ->
-            val normalized = if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
-            prefs.edit { putInt("homeQuickEntryLayout", normalized) }
-        }
+        quickEntryIds.value = readHomeQuickEntryIds()
+        quickEntryLayout.value = readHomeQuickEntryLayout()
     }
 
     private fun readHomeQuickEntryIds(): List<String> =
-        if (!::prefs.isInitialized) emptyList()
-        else prefs.getString("homeQuickEntryIds", null)
+        prefs.getString("homeQuickEntryIds", null)
             ?.split("|||")
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
@@ -71,8 +67,7 @@ object AppPrefs {
             ?: emptyList()
 
     private fun readHomeQuickEntryLayout(): Int =
-        if (!::prefs.isInitialized) HOME_QUICK_LAYOUT_GRID
-        else if (prefs.getInt("homeQuickEntryLayout", HOME_QUICK_LAYOUT_GRID) == HOME_QUICK_LAYOUT_BUTTONS) {
+        if (prefs.getInt("homeQuickEntryLayout", HOME_QUICK_LAYOUT_GRID) == HOME_QUICK_LAYOUT_BUTTONS) {
             HOME_QUICK_LAYOUT_BUTTONS
         } else {
             HOME_QUICK_LAYOUT_GRID
@@ -217,29 +212,23 @@ object AppPrefs {
     fun flushMessageBoardDrafts(): Boolean = prefs.edit().putString("messageBoardDraftsJson", messageBoardDraftsJson).commit()
     var lastUpdateCheck by longPref(0L)
 
-    val homeQuickEntryIdsState get() = homeQuickEntryIdsPreference.state
-    var homeQuickEntryIds: List<String>
-        get() = if (::homeQuickEntryIdsPreference.isInitialized) homeQuickEntryIdsPreference.value else readHomeQuickEntryIds()
-        set(value) {
-            val normalized = value.map { it.trim() }.filter { it.isNotEmpty() }.take(6)
-            if (::homeQuickEntryIdsPreference.isInitialized) {
-                homeQuickEntryIdsPreference.value = normalized
-            } else if (::prefs.isInitialized) {
-                prefs.edit { putString("homeQuickEntryIds", normalized.joinToString("|||")) }
-            }
-        }
+    val homeQuickEntryIdsState = quickEntryIds.asStateFlow()
+    val homeQuickEntryLayoutState = quickEntryLayout.asStateFlow()
+    val homeQuickEntryIds get() = homeQuickEntryIdsState.value
+    val homeQuickEntryLayout get() = homeQuickEntryLayoutState.value
 
-    val homeQuickEntryLayoutState get() = homeQuickEntryLayoutPreference.state
-    var homeQuickEntryLayout: Int
-        get() = if (::homeQuickEntryLayoutPreference.isInitialized) homeQuickEntryLayoutPreference.value else readHomeQuickEntryLayout()
-        set(value) {
-            val normalized = if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
-            if (::homeQuickEntryLayoutPreference.isInitialized) {
-                homeQuickEntryLayoutPreference.value = normalized
-            } else if (::prefs.isInitialized) {
-                prefs.edit { putInt("homeQuickEntryLayout", normalized) }
-            }
+    /** Both keys belong to one editor save, including when upgrading an old short list. */
+    fun saveHomeQuickEntries(ids: List<String>, layout: Int) {
+        require(ids.size == 6 && ids.distinct().size == ids.size && ids.all { it.isNotBlank() })
+        require(layout == HOME_QUICK_LAYOUT_GRID || layout == HOME_QUICK_LAYOUT_BUTTONS)
+        val ordered = ids.toList()
+        prefs.edit {
+            putString("homeQuickEntryIds", ordered.joinToString("|||"))
+            putInt("homeQuickEntryLayout", layout)
         }
+        quickEntryIds.value = ordered
+        quickEntryLayout.value = layout
+    }
 
     var toolsOutputPath: String
         get() = prefs.getString("toolsOutputPath", null)

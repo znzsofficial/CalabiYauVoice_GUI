@@ -28,8 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -63,7 +61,7 @@ internal fun ExtractionDropQualityBadge(label: String, code: Int) {
 
 @Composable
 internal fun ExtractionDropThumbnail(
-    name: String, qualityLabel: String, qualityCode: Int, imageUrl: String?, modifier: Modifier = Modifier
+    qualityCode: Int, imageUrl: String?, modifier: Modifier = Modifier
 ) {
     val shape = smoothCornerShape(10.dp)
     val color = extractionDropQualityColor(qualityCode)
@@ -71,8 +69,7 @@ internal fun ExtractionDropThumbnail(
     val imageAlpha by animateFloatAsState(if (loaded) 1f else 0f, tween(DropMotion.reveal), label = "drop-artwork")
     Box(modifier.size(56.dp).clip(shape)
         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-        .border(1.dp, color.copy(alpha = 0.45f), shape)
-        .semantics { contentDescription = listOf(name, qualityLabel).filter { it.isNotBlank() }.joinToString("，") },
+        .border(1.dp, color.copy(alpha = 0.45f), shape),
         contentAlignment = Alignment.Center) {
         if (!loaded) Icon(Icons.Outlined.Inventory2, contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))

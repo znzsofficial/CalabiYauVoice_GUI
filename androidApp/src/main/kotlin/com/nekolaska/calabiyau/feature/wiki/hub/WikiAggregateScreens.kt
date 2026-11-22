@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HowToVote
 import androidx.compose.material.icons.outlined.Inventory2
@@ -48,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 
 @Composable
@@ -208,35 +208,19 @@ internal fun WikiCatalogHubScreen(
                     backdrop = backdrop
                 )
             }
-            item(key = "extraction_heading") {
-                Text("弦溯战线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            }
-            catalogHubExtractionEntries.forEach { entry ->
-                item(key = "extraction_${entry.kind.name}") {
-                    ActionCard(
-                        title = entry.kind.title,
-                        subtitle = entry.subtitle,
-                        icon = Icons.Outlined.Inventory2,
-                        onClick = { onNavigateTo(entry.route) },
-                        backdrop = backdrop
-                    )
-                }
+            item(key = "extraction_hub") {
+                ActionCard(
+                    title = "弦溯战线",
+                    subtitle = "物资、装备与掉落",
+                    icon = Icons.Outlined.Explore,
+                    onClick = { onNavigateTo(WikiRoute.ExtractionHub) },
+                    backdrop = backdrop
+                )
             }
             item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
-
-/** Shared by the catalog hub and its navigation regression test, never by the mode page. */
-internal data class CatalogHubExtractionEntry(val kind: ExtractionCatalogKind, val subtitle: String) {
-    val route: WikiRoute get() = WikiRoute.ExtractionCatalog(kind)
-}
-
-internal val catalogHubExtractionEntries = listOf(
-    CatalogHubExtractionEntry(ExtractionCatalogKind.LOOT, "材料、消耗品、弹药、背包与钥匙卡等"),
-    CatalogHubExtractionEntry(ExtractionCatalogKind.ATTACHMENTS, "配件效果与适用武器"),
-    CatalogHubExtractionEntry(ExtractionCatalogKind.DROPS, "晶源体、首领与容器掉落")
-)
 
 @Composable
 internal fun WikiExtensionHubScreen(
@@ -439,7 +423,7 @@ internal fun WikiDecorationHubScreen(
 }
 
 @Composable
-private fun AggregatePageScaffold(
+internal fun AggregatePageScaffold(
     title: String,
     onBack: () -> Unit,
     backdrop: Backdrop,

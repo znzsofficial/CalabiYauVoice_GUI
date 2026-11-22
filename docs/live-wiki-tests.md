@@ -4,6 +4,9 @@
 
 优先使用跟踪fixture和已有本地快照。只有明确需要核验当前上游时才启用联网测试；下面的强制重跑命令是**主动抓取**入口，不是普通发布步骤。当前验证结果以[发布记录](README.md#发布记录)为准，设备行为见[设备验收](device-acceptance.md)。
 
+- `WikiGoldenFixtureTest` 使用随仓库提交的精简 API JSON（公告 ask、活动与武器 parse），新检出即可离线运行。
+- `WikiRealPageGoldenTest` 读取 `androidApp/src/test/resources/fixtures/pages/` 中的本地整页样本；该目录不入库，缺文件时不验证对应页面。上游结构变动时，按原查询重抓（正文页用 `action=parse&page=<页名>&prop=text`），核对新页面中的具体字段，再更新样本和断言。
+
 ### 本地完整快照入口
 
 这些环境变量只指定已有文件/目录，不自动抓取；未配置时对应的可选审计跳过，其余跟踪fixture仍可运行。文件格式与目录命名须遵照对应专题，不能混用完整网页、parse JSON及wikitext。
@@ -17,7 +20,7 @@
 | `CHARACTER_SETTINGS_AUDIT_FILE` | 超弦体补充设定 | [设定审计](character-detail-presentation.md) |
 | `WIKI_LIST_AUDIT_DIR` | 角色、武器、地图列表 | [列表审计](wiki-list-resilience.md) |
 | `EXTRACTION_AUDIT_DIR`、`EXTRACTION_DROPS_AUDIT_FILE`、`EXTRACTION_CONTAINERS_AUDIT_DIR`、`EXTRACTION_UPDATED_AUDIT_DIR` | 多代弦溯结构 | 各自对应不同上游结构，不相互替代；[专题](extraction-mode-implementation.md) |
-| `EXTRACTION_SPLIT_AUDIT_DIR` | 11 月 21 日晚物资迁页与配件 Q8 | 使用独立的晚间完整快照，核对新旧入口、188 项物资、142 项配件及配图身份；保留白天快照基线。 |
+| `EXTRACTION_SPLIT_AUDIT_DIR` | 11 月 21 日晚的弦溯物资、配件、装备和工坊 | 新旧物资入口与配件 Q8 使用迁页快照；同批 `guns`、`armor`、`workshop` 捕获供新栏目的离线验证。工坊保留完整 `.json`（含 HTML 与 wikitext）和 `.html`；不要覆盖白天的基线。 |
 | `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
 | `WIKI_NOV21_AUDIT_DIR` | 11 月 21 日弦溯、指南、伏闪 | 弦溯读 `drops.html`、`table.html`、`loot.html`、`attachments.html`；指南读 `beginner.html`、`review-1121/120474.html`、`review-1121/historical-120474.json`；伏闪优先读 `fushan-current.json`，也可用 `fushan.html` 与 `120510.txt`。 |
 
@@ -53,8 +56,8 @@ Remove-Item Env:LIVE_WIKI_TEST
   使用与生产 source 相同的页名独立验证两端（一端失败不跳过另一端），
   锁定 PC「理想币」/移动端「排位币」的分类、简介、原图 URL，并校验卡片数量下限。
   新快照为 `build/live-wiki/items_pc.html`、`items_mobile.html`；不再读取旧 `items.html`。
-  `fixtures/items/` 的两个小型真实卡片夹具随仓库提交，离线也能锁定两端的实际结构。
-  移动端仅收录独有道具，共有道具仍在 PC 图鉴；两端内存/磁盘缓存独立。
+  `fixtures/items/` 的两个跟踪样本覆盖现行卡片解析，不再以旧合并页的表格作为回归基线。
+  移动端仅收录独有道具，共有道具仍在 PC 图鉴。`ItemCatalogPlatform` 管理两端的页名和缓存键，内存与磁盘均按平台隔离；不再请求合并页或读取旧 `item_catalog` 缓存。旧快捷入口和保存的 `WikiRoute.Items` 仍打开 PC，移动端使用独立的 `MobileItems`。
 
 - `fetchesAndParsesWeaponSkinModuleWhenEnabled`：2026-09-18 联网验证发现武器外观 Lua 模块的输出从
   `|- class="divsort" data-param*` 表格行改为 `div.klbq-skin-card[data-param*]` 卡片结构，
@@ -73,6 +76,5 @@ Remove-Item Env:LIVE_WIKI_TEST
 - 角色详情：`CharacterDetailLiveAuditTest` 读取 `build/char-audit/` 下的抓取
   （action=parse&page=<角色名>&prop=wikitext|text，超弦体×2 + 晶源体×1）跑完整 parser
   （`CharacterDetailApi.parseCharacterWikitext`，internal 供测试），
-  断言技能/数值组/增幅模式（爆破+极限推进+弦区争夺克隆）/故事条目/声优拆分/定位等。
-- 限流：`fetchBody` 每次请求后强制 6.5 秒间隔（成功与失败路径都等待），四把霰弹枪诊断时以墙钟 187 秒实测生效；
-  新增请求时保持该节奏，否则触发 EdgeOne 567 封锁（封锁持续时间远长于请求间隔）。
+  断言技能/数值组/增幅模式（爆破+极限推进+弦区争夺克隆）/故事条目/声优拆分/定位等。此审计和 `parsesLocalLiveSnapshotsWhenPresent` 都只读本地，缺少相应捕获时跳过。
+- 限流：`fetchBody` 每次请求后强制 6.5 秒间隔（成功与失败路径都等待），四把霰弹枪诊断时以墙钟 187 秒实测生效；新增请求时保持该节奏。遇到 EdgeOne HTTP 567 应停止抓取；同一 IP 的浏览器也可能受限，等数十分钟后再复核，不要连续重试。

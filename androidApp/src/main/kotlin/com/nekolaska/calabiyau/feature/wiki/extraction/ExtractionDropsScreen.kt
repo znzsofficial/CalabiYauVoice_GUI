@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
@@ -31,25 +32,42 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.api.rememberDropArtwork
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.source.ExtractionCatalogRemoteSource
 import data.SharedJson
+import data.ErrorKind
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
-import util.wikiPathEncode
 
-private val DropNavigationSaver = Saver<DropNavigation, String>(
+private const val dropReferenceTitle = "掉落池与首领阶段"
+
+private fun dropLoadMessage(subject: String, kind: ErrorKind) = when (kind) {
+    ErrorKind.PARSE -> "暂时无法显示完整的$subject"
+    ErrorKind.TIMEOUT -> "${subject}加载超时"
+    ErrorKind.CDN_BLOCKED -> "Wiki 暂时限制访问，无法加载$subject"
+    else -> "${subject}加载失败"
+}
+
+private fun dropNavigationSaver(initial: DropNavigation) = Saver<DropNavigation, String>(
     save = { SharedJson.encodeToString(it) },
     restore = { encoded -> runCatching { SharedJson.decodeFromString<DropNavigation>(encoded) }
-        .getOrNull()?.takeIf { it.history.isNotEmpty() } ?: DropNavigation() }
+        .getOrNull()?.takeIf { it.history.isNotEmpty() } ?: initial }
 )
 
 @Composable
 internal fun ExtractionDropsScreen(
-    onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit, isActive: () -> Boolean = { true }
+    onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit, isActive: () -> Boolean = { true },
+    initialTask: DropTask = DropTask.ITEMS
 ) {
-    var navigation by rememberSaveable(stateSaver = DropNavigationSaver) { mutableStateOf(DropNavigation()) }
+    val initial = remember(initialTask) { DropNavigation(initialTask) }
+    var navigation by rememberSaveable(initialTask, stateSaver = remember(initial) { dropNavigationSaver(initial) }) {
+        mutableStateOf(initial)
+    }
     val displayedNavigation = navigation
     val location = displayedNavigation.current
+    val focus = LocalFocusManager.current
     fun navigate(change: (DropNavigation) -> DropNavigation) {
-        if (isActive() && navigation === displayedNavigation) navigation = change(navigation)
+        if (isActive() && navigation === displayedNavigation) {
+            focus.clearFocus()
+            navigation = change(navigation)
+        }
     }
     fun goBack() {
         // A dismiss animation or a second tap must not pop the next location in the same frame.
@@ -97,7 +115,7 @@ internal fun ExtractionDropsScreen(
     }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text(if (location.reference != null) "规则与原始资料" else "掉落图鉴", fontWeight = FontWeight.Bold) },
+        TopAppBar(title = { Text(if (location.reference != null) dropReferenceTitle else "掉落查询", fontWeight = FontWeight.Bold) },
             navigationIcon = { BackNavButton(onClick = ::goBack) },
             actions = {
                 RefreshActionButton(onClick = {
@@ -107,19 +125,19 @@ internal fun ExtractionDropsScreen(
                 Box {
                     IconButton(onClick = { moreActions = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
                     DropdownMenu(expanded = moreActions && isActive(), onDismissRequest = { moreActions = false }) {
-                        if (location.reference == null) DropdownMenuItem(text = { Text("规则与原始资料") },
+                        if (location.reference == null) DropdownMenuItem(text = { Text(dropReferenceTitle) },
                             leadingIcon = { Icon(Icons.Outlined.Info, null) },
                             onClick = { moreActions = false; navigate { it.openReference() } })
-                        DropdownMenuItem(text = { Text("查看 Wiki 原页") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
+                        DropdownMenuItem(text = { Text("Wiki 原文") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
                             onClick = {
                                 moreActions = false
-                                onOpenWikiUrl("https://wiki.biligame.com/klbq/${page.wikiPathEncode()}")
+                                onOpenWikiUrl(extractionArticleUrl(page))
                             })
                     }
                 }
             })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             if (location.reference == null) PrimaryTabRow(selectedTabIndex = location.task.ordinal) {
                 DropTask.entries.forEach { task ->
                     Tab(selected = location.task == task, onClick = {
@@ -133,25 +151,26 @@ internal fun ExtractionDropsScreen(
             }) {
                 uiState.SaveableStateProvider(contentKey) {
                 if (location.reference == null && location.task == DropTask.SOURCES) {
-                    ExtractionDropBrowser(sourceRecords, artwork,
+                    ExtractionDropBrowser(sourceRecords, artwork, catalogEntries = catalog.data,
                         isActive = isActive(),
+                        partialSources = containers.data.isEmpty() != catalog.data.isEmpty(),
                          loading = containersPending || catalogPending,
                          loadFailed = containers.error != null || catalog.error != null,
                         filtersAuthoritative = !containersPending && !catalogPending && containers.error == null && catalog.error == null,
                         status = {
                             if (containers.isOffline && !containers.isShowingCachedPrefetch) OfflineBanner(ageMs = containers.cacheAgeMs)
                             if (catalog.isOffline && !catalog.isShowingCachedPrefetch) {
-                                Text("来源说明使用离线记录", style = MaterialTheme.typography.labelMedium)
+                                Text("来源说明", style = MaterialTheme.typography.labelMedium)
                                 OfflineBanner(ageMs = catalog.cacheAgeMs)
                             }
                             if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                             containers.error?.let { error ->
-                                DropErrorBanner("物品列表更新失败：${error.message}", "重试物品列表") {
+                                DropErrorBanner(dropLoadMessage("容器掉落表", error.kind), "重试") {
                                     containers.reload(forceRefresh = true)
                                 }
                             }
                             catalog.error?.let { error ->
-                                DropErrorBanner("部分来源说明未能更新：${error.message}", "重试来源说明") {
+                                DropErrorBanner(dropLoadMessage("来源说明", error.kind), "重试") {
                                     catalog.reload(forceRefresh = true)
                                 }
                             }
@@ -164,7 +183,7 @@ internal fun ExtractionDropsScreen(
                     val status: @Composable () -> Unit = {
                         if (active.isOffline && !active.isShowingCachedPrefetch) OfflineBanner(ageMs = active.cacheAgeMs)
                         active.error?.let { error ->
-                            DropErrorBanner(error.message, "重新加载") {
+                            DropErrorBanner(dropLoadMessage(if (location.reference != null) "掉落图鉴" else "容器掉落表", error.kind), "重试") {
                                 active.reload(forceRefresh = true)
                             }
                         }
@@ -176,11 +195,11 @@ internal fun ExtractionDropsScreen(
                             ExtractionDropBrowser(entries.map { DropSourceRecord(it, false) }, artwork,
                                 isActive = isActive(),
                                 filtersAuthoritative = !catalogPending && catalog.error == null,
-                                 reference = true, loading = catalogPending, loadFailed = catalog.error != null, status = {
+                                 view = reference, loading = catalogPending, loadFailed = catalog.error != null, status = {
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         listOf(ExtractionDropView.POOLS, ExtractionDropView.STAGES).forEach { view ->
                                             FilterChip(selected = reference == view, onClick = { navigate { it.selectReference(view) } },
-                                                label = { Text(if (view == ExtractionDropView.POOLS) "共用掉落池" else "Boss 阶段对照") })
+                                                label = { Text(if (view == ExtractionDropView.POOLS) "掉落池" else "首领阶段对照") })
                                         }
                                     }
                                     status()
@@ -211,21 +230,21 @@ internal fun ExtractionDropsScreen(
     if (isActive()) key(detailKey) {
         when {
             location.linkedPool && container == null && sharedPool == null -> WikiContentSheet(onDismiss = ::goBack) {
-                item("title") { Text(source?.name ?: "来源物品", style = MaterialTheme.typography.headlineSmall) }
+                item("title") { Text(source?.name ?: "候选物品", style = MaterialTheme.typography.headlineSmall) }
                 when {
                     (source?.containerId != null && containersPending) || catalogPending -> {
-                        items(4) { SkeletonTextLine(widthFraction = 0.8f) }
-                        item("loading") { Text("正在读取该来源的物品…") }
+                         items(4) { DropLookupRowSkeleton() }
+                         item("loading") { Text("正在加载候选物品…") }
                     }
                     source?.containerId != null && containers.error != null -> item("error") {
-                        Text("物品列表加载失败", color = MaterialTheme.colorScheme.error)
+                        Text("容器掉落表加载失败", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试") }
                     }
                     catalog.error != null -> item("error") {
-                        Text("来源说明加载失败，暂时无法显示物品列表。", color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试来源说明") }
+                        Text("来源说明加载失败", color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试") }
                     }
-                    else -> item("unlinked") { Text("暂未找到对应的物品列表，来源说明仍可查看。") }
+                    else -> item("unlinked") { Text("暂无对应的掉落池") }
                 }
                 item("back") { TextButton(onClick = ::goBack) { Text("返回来源说明") } }
             }
@@ -233,7 +252,7 @@ internal fun ExtractionDropsScreen(
                 ExtractionDetailSheet(sourcePoolDetail(source!!, sharedPool), location.query, sharedSourceList = true,
                     artwork = artwork, onFindItem = { item -> navigate { it.openItem(item) } },
                     offlineAgeMs = catalog.cacheAgeMs.takeIf { catalog.isOffline && !catalog.isShowingCachedPrefetch },
-                    poolError = catalog.error?.message, poolIsLoading = catalogPending,
+                    poolError = catalog.error?.let { dropLoadMessage("掉落池", it.kind) }, poolIsLoading = catalogPending,
                     onRefreshPool = { catalog.reload(forceRefresh = true) },
                     dismissLabel = "返回来源说明", onDismiss = ::goBack)
             }
@@ -243,16 +262,18 @@ internal fun ExtractionDropsScreen(
                     initialPoolQuality = location.poolQuality,
                     onFindItem = { item -> navigate { it.openItem(item) } },
                     offlineAgeMs = containers.cacheAgeMs.takeIf { containers.isOffline && !containers.isShowingCachedPrefetch },
-                    poolError = containers.error?.message, poolIsLoading = containersPending,
+                    poolError = containers.error?.let { dropLoadMessage("容器掉落表", it.kind) }, poolIsLoading = containersPending,
                     onRefreshPool = { containers.reload(forceRefresh = true) }, artwork = artwork,
                     onViewSourceNotes = notes?.let { note -> { navigate { it.openSource(note.id) } } },
                     dismissLabel = "返回上一页", onDismiss = ::goBack)
             }
             source != null -> detailState.SaveableStateProvider(detailKey) {
+                val sourcePool = linkedDropSharedPool(source, catalog.data)
                 ExtractionDetailSheet(source, location.query, artwork = artwork,
+                    evidenceGroups = sourcePool?.dropPoolGroups ?: source.dropPoolGroups,
                     onFindItem = { item -> navigate { it.openItem(item) } },
                     onViewCompletePool = if (source.type == ExtractionEntryType.DROP_SOURCE &&
-                        (source.containerId != null || linkedDropSharedPool(source, catalog.data) != null))
+                        (source.containerId != null || sourcePool != null))
                         ({ navigate { it.openLinkedPool() } }) else null,
                     dismissLabel = "返回上一页", onDismiss = ::goBack)
             }
@@ -260,9 +281,9 @@ internal fun ExtractionDropsScreen(
                 item("missing") {
                     val pending = if (location.sourceId != null) catalogPending else containersPending
                     val resource = if (location.sourceId != null) catalog else containers
-                    Text(if (pending) "正在加载来源详情…" else "该来源暂不可用")
+                    if (pending || resource.error == null) Text(if (pending) "正在加载来源详情…" else "暂未找到此来源")
                     resource.error?.let { error ->
-                        Text(error.message, color = MaterialTheme.colorScheme.error)
+                        Text(dropLoadMessage("来源详情", error.kind), color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { resource.reload(forceRefresh = true) }) { Text("重试") }
                     }
                     TextButton(onClick = ::goBack) { Text("返回上一页") }
@@ -283,16 +304,24 @@ internal fun sourcePoolDetail(source: ExtractionEntry, pool: ExtractionEntry): E
 @Composable
 private fun ExtractionDropBrowser(
     records: List<DropSourceRecord>, artwork: DropArtworkIndex,
-    modifier: Modifier = Modifier, reference: Boolean = false,
+    modifier: Modifier = Modifier, view: ExtractionDropView = ExtractionDropView.SOURCES,
+    catalogEntries: List<ExtractionEntry> = emptyList(),
+    partialSources: Boolean = false,
     loading: Boolean = false, loadFailed: Boolean = false, filtersAuthoritative: Boolean = true, isActive: Boolean = true,
     status: @Composable () -> Unit = {}, onSelect: (DropSourceRecord, String) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var filters by rememberSaveable { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val subject = when (view) {
+        ExtractionDropView.SOURCES -> "来源"
+        ExtractionDropView.POOLS -> "掉落池"
+        ExtractionDropView.STAGES -> "首领阶段"
+    }
     val categories = remember(records) { records.map { it.entry.filterCategory }.distinct() }
-    val filtered = remember(records, query, category) {
-        records.filter { category == null || it.entry.filterCategory == category }.mapNotNull { it.matchingRecord(query) }
+    val filtered = remember(records, query, category, catalogEntries) {
+        records.filter { category == null || it.entry.filterCategory == category }.mapNotNull { it.matchingRecord(query, catalogEntries) }
     }
     LaunchedEffect(categories, filtersAuthoritative) {
         if (filtersAuthoritative && categories.isNotEmpty() && category !in categories) category = null
@@ -301,12 +330,16 @@ private fun ExtractionDropBrowser(
         item("controls") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
-                    isSearching = false, placeholder = if (reference) "搜索资料名称或内容…" else "搜索箱子、Boss 或物品…")
-                DropFilterBar(summary = if (loading && records.isEmpty()) "正在读取${if (reference) "资料" else "来源"}…"
-                    else "${filtered.size} 条${if (reference) "资料" else "来源记录"}",
-                    label = category ?: "筛选分类", onClick = { filters = true }, enabled = records.isNotEmpty(),
-                    activeFilter = category != null,
-                    onReset = if (category != null) ({ category = null }) else null)
+                    isSearching = false, placeholder = when (view) {
+                        ExtractionDropView.SOURCES -> "搜索来源或物品"
+                        ExtractionDropView.POOLS -> "搜索掉落池或物品"
+                        ExtractionDropView.STAGES -> "搜索阶段或掉落内容"
+                    })
+                DropFilterBar(summary = if (loading && records.isEmpty()) "正在加载${subject}…"
+                    else if (loadFailed && records.isEmpty()) subject
+                    else if (partialSources) "已加载的来源中匹配 ${filtered.size} 个" else "${filtered.size} 个$subject",
+                    label = category ?: "分类", onClick = { focus.clearFocus(); filters = true }, enabled = records.isNotEmpty(),
+                    activeFilter = category != null)
                 status()
             }
         }
@@ -314,14 +347,21 @@ private fun ExtractionDropBrowser(
             if (loading && records.isEmpty()) items(4, key = { "source-skeleton:$it" }, contentType = { "skeleton" }) {
                 DropSourceCardSkeleton(Modifier.dropItemMotion(this))
             }
-            else if (!(loadFailed && records.isEmpty())) item("empty") { CatalogEmptyResults(onClear = { query = ""; category = null }) }
+            else if (!(loadFailed && records.isEmpty())) item("empty") {
+                ExtractionEmptyResults(message = if (partialSources) "已加载的来源中没有匹配项"
+                    else if (query.isNotBlank() || category != null) "没有符合条件的$subject" else "暂无$subject",
+                    onClearQuery = if (query.isNotEmpty()) ({ query = "" }) else null,
+                    onClearFilters = if (category != null) ({ category = null }) else null)
+            }
         }
         items(filtered, key = { "${it.isContainer}:${it.entry.id}" }, contentType = { it.entry.type }) { record ->
-            ExtractionDropCard(modifier = Modifier.dropItemMotion(this), entry = record.entry, query = query, artwork = artwork, onClick = { onSelect(record, query) })
+            val sharedPool = remember(record.entry, catalogEntries) { linkedDropSharedPool(record.entry, catalogEntries) }
+            ExtractionDropCard(modifier = Modifier.dropItemMotion(this), entry = record.entry, query = query, isContainer = record.isContainer,
+                sharedPool = sharedPool, artwork = artwork, onClick = { onSelect(record, query) })
         }
     }
-    if (filters && isActive) WikiSelectionSheet(title = "来源分类", onDismiss = { filters = false }) {
-        item("all") { SelectionOptionRow(label = "全部来源", selected = category == null, onClick = { category = null; filters = false }) }
+    if (filters && isActive) WikiSelectionSheet(title = "${subject}分类", onDismiss = { filters = false }) {
+        item("all") { SelectionOptionRow(label = "全部分类", selected = category == null, onClick = { category = null; filters = false }) }
         items(categories, key = { it }) { value ->
             SelectionOptionRow(label = value, selected = category == value, onClick = { category = value; filters = false })
         }

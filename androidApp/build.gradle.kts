@@ -57,8 +57,8 @@ android {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 65
-        versionName = "2.2.4"
+        versionCode = 66
+        versionName = "2.2.5"
     }
 
     val localProps = Properties()

@@ -104,11 +104,27 @@
       #loginCard input { width: 100%; margin-bottom: 10px; }
       #loginCard button { width: 100%; }
       .logout { margin-left: auto; }
-      #usageSection h2 { margin-top: 0; }
+      .usage-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+      .usage-heading h2 { margin: 0; font-size: 1.2rem; }
       #usageSection h3 { font-size: 1rem; margin: 24px 0 8px; }
-      .usage-summary { font-size: 1rem; font-weight: 600; }
+      #usageSection .hint { margin: 6px 0; font-size: .82rem; line-height: 1.55; }
+      #usageError:empty { min-height: 0; margin: 0; }
+      .usage-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+      .usage-periods h3 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+      .usage-periods h3 small { color: var(--muted); font-size: .8rem; font-weight: 400; }
+      .usage-periods dl { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 8px 12px; margin: 0; padding: 12px 0; border-top: 1px solid var(--border); }
+      .usage-periods dt { font-size: .9rem; }
+      .usage-periods dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
       .usage-table { overflow-x: auto; }
-      #usageSection td:not(:first-child) { font-variant-numeric: tabular-nums; }
+      .usage-table th:not(:first-child), .usage-table td:not(:first-child) { text-align: right; }
+      .usage-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .usage-daily { max-height: 21rem; }
+      .usage-daily th { position: sticky; top: 0; background: var(--bg); }
+      @media (max-width: 640px) {
+        .usage-periods { grid-template-columns: 1fr; }
+        .usage-table th, .usage-table td { padding: 7px 4px; }
+        .usage-daily th small { display: block; font-weight: 400; }
+      }
     </style>
   </head>
   <body>
@@ -202,19 +218,44 @@
         </div>
         </div>
         <section id="usageSection" class="card" style="display:none">
-          <h2>Android 使用统计</h2>
-          <div class="toolbar"><button id="refreshUsage">刷新统计</button></div>
+          <div class="usage-heading"><h2>Android 使用统计</h2><button id="refreshUsage">刷新统计</button></div>
           <div id="usageError" class="error" role="status"></div>
+          <p id="usageEmpty" hidden>尚无上报。收到首份统计后，这里会显示启动次数和用户数。</p>
           <div id="usageContent" hidden>
-            <p class="usage-summary">今日：<span id="usageToday"></span></p>
-            <p class="usage-summary">自接入以来：<span id="usageLifetime"></span></p>
-            <p class="hint">按北京时间统计，不含接入前的数据。日活按安装去重；每个安装仅在首次参与日有上报时计入新增一次。累计新增不是每日活跃数之和，也不代表下载量或人数。</p>
-            <h3>今日活跃版本</h3><div class="usage-table"><table><thead><tr><th>版本</th><th>安装数</th><th>占比</th></tr></thead><tbody id="usageVersions"></tbody></table></div>
-            <h3>近 30 天功能结果</h3><div class="usage-table"><table><thead><tr><th>功能</th><th>成功</th><th>网络失败</th><th>资料错误</th><th>其他失败</th><th>成功率</th></tr></thead><tbody id="usageFeatures"></tbody></table></div>
-            <p id="usageRecovered"></p>
-            <h3>每日趋势与留存</h3>
-            <p class="hint">留存按新增安装在第 1 或第 7 天再次进入前台计算，观察日未结束或无新增时显示“—”。离线补报可能修正近 7 天的数据。</p>
-            <div class="usage-table"><table><thead><tr><th>日期</th><th>冷启动</th><th>日活安装</th><th>新增安装</th><th>次日留存</th><th>7 日留存</th></tr></thead><tbody id="usageDays"></tbody></table></div>
+            <div class="usage-periods">
+              <section>
+                <h3>今日 <small id="usageTodayDate"></small></h3>
+                <dl>
+                  <dt>启动次数（冷启动）</dt><dd id="usageTodayStarts"></dd>
+                  <dt>当天用户数（日活）</dt><dd id="usageTodayUsers"></dd>
+                  <dt>新增安装</dt><dd id="usageTodayNew"></dd>
+                </dl>
+                <p class="hint">同一安装当天多次进入前台，日活只计一次。</p>
+              </section>
+              <section>
+                <h3>自接入以来 <small id="usageSince"></small></h3>
+                <dl>
+                  <dt>累计冷启动次数</dt><dd id="usageLifetimeStarts"></dd>
+                  <dt>累计新增安装</dt><dd id="usageLifetimeNew"></dd>
+                </dl>
+                <p class="hint">累计用户按新增安装估算，不代表实际人数。各天日活不能相加。</p>
+              </section>
+            </div>
+
+            <h3 id="usageDaysTitle">近 30 天逐日统计</h3>
+            <p class="hint">按北京时间统计。新增只计首次参与当天进入前台并上报的安装；离线补报可能更新近 7 天的数据。</p>
+            <div class="usage-table usage-daily" role="region" aria-labelledby="usageDaysTitle" tabindex="0"><table aria-labelledby="usageDaysTitle">
+              <thead><tr><th>日期</th><th>冷启动<small>（次）</small></th><th>日活用户<small>（安装数）</small></th><th>新增安装<small>（个）</small></th></tr></thead><tbody id="usageDays"></tbody>
+            </table></div>
+
+            <h3>今日活跃版本</h3><div class="usage-table"><table><thead><tr><th>版本</th><th>活跃安装数</th><th>占比</th></tr></thead><tbody id="usageVersions"></tbody></table></div>
+            <h3>近 30 天功能成功率</h3><div class="usage-table"><table><thead><tr><th>功能</th><th>成功（次）</th><th>网络失败（次）</th><th>资料错误（次）</th><th>其他失败（次）</th><th>成功率</th></tr></thead><tbody id="usageFeatures"></tbody></table></div>
+            <p class="hint" id="usageRecovered"></p>
+            <h3 id="usageRetentionTitle">新增安装留存</h3>
+            <p class="hint">留存率是当日新增安装中，第 1 天或第 7 天再次进入前台的比例。</p>
+            <div class="usage-table usage-daily" role="region" aria-labelledby="usageRetentionTitle" tabindex="0"><table aria-labelledby="usageRetentionTitle">
+              <thead><tr><th>首次参与日期</th><th>新增安装数</th><th>次日留存</th><th>7 日留存</th></tr></thead><tbody id="usageRetention"></tbody>
+            </table></div>
           </div>
         </section>
         <div id="auditSection" class="card" style="display:none">
@@ -487,8 +528,9 @@
       async function loadUsage() {
         const ticket = ++usageVersion;
         $("refreshUsage").disabled = true;
-        $("usageContent").hidden = true;
+        $("usageEmpty").hidden = true;
         showError($("usageError"), "读取中…");
+        let rendering = false;
         const percent = (n,d) => n == null || !d ? "—" : `${(100*n/d).toFixed(1)}%`;
         function rows(id, values) {
           $(id).replaceChildren(...values.map(row => {
@@ -499,24 +541,47 @@
         }
         try {
           const response = await fetch("/api/admin/usage", { headers: headers() });
-          if (response.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+          if (ticket !== usageVersion) return;
+          if (response.status === 401) {
+            $("usageContent").hidden = true;
+            sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return;
+          }
           if (!response.ok) throw new Error(`读取统计失败（HTTP ${response.status}）`);
           const { days, versions, totals, lifetime } = await response.json();
           if (ticket !== usageVersion) return;
+          if (lifetime.since === null) {
+            $("usageContent").hidden = true;
+            $("usageEmpty").hidden = false;
+            showError($("usageError"), "");
+            return;
+          }
           const today = days.at(-1);
-          $("usageToday").textContent = today && lifetime.since !== null
-            ? `冷启动 ${today.starts} 次，活跃 ${today.dau} 个安装，新增 ${today.newInstalls} 个安装` : "尚无上报";
-          $("usageLifetime").textContent = lifetime.since !== null
-            ? `累计冷启动 ${lifetime.starts} 次，累计新增 ${lifetime.newInstalls} 个安装（最早记录：${lifetime.since}）` : "尚无上报";
-          rows("usageVersions", versions.length ? versions.map(v => [v.version, v.installs, percent(v.installs,today?.dau)]) : [["尚无上报", "—", "—"]]);
+          const count = (value, unit) => value == null ? "—" : `${value.toLocaleString("zh-CN")} ${unit}`;
+          rendering = true;
+          $("usageTodayDate").textContent = `${today.date} 北京时间`;
+          $("usageTodayStarts").textContent = count(today.starts, "次");
+          $("usageTodayUsers").textContent = count(today.dau, "个安装");
+          $("usageTodayNew").textContent = count(today.newInstalls, "个安装");
+          $("usageSince").textContent = `最早记录 ${lifetime.since}`;
+          $("usageLifetimeStarts").textContent = count(lifetime.starts, "次");
+          $("usageLifetimeNew").textContent = count(lifetime.newInstalls, "个安装");
+          const recent = days.filter(d => d.date >= lifetime.since).reverse();
+          rows("usageDays", recent.map(d => [d.date, d.starts, d.dau, d.newInstalls]));
+          const retention = (returned, installs) => !installs ? "无新增" : returned == null ? "观察日未结束" : percent(returned, installs);
+          rows("usageRetention", recent.map(d => [d.date, d.newInstalls, retention(d.d1, d.newInstalls), retention(d.d7, d.newInstalls)]));
+          rows("usageVersions", versions.length ? versions.map(v => [v.version, v.installs, percent(v.installs, today.dau)]) : [["暂无活跃安装", "—", "—"]]);
           rows("usageFeatures", [["cards","卡牌首开"],["vote","投票提交"],["download","资源下载"],["subtitle","字幕导出"]].map(([key,label]) => {
             const [ok,network,data,other] = ["ok","network","data","other"].map(k => totals[`${key}_${k}`]);
             return [label,ok,network,data,other,percent(ok,ok+network+data+other)];
           }));
           $("usageRecovered").textContent = `卡牌首开失败后，在同次访问刷新成功：${totals.cards_recovered} 次`;
-          rows("usageDays", days.reverse().map(d => [d.date,d.starts,d.dau,d.newInstalls,percent(d.d1,d.newInstalls),percent(d.d7,d.newInstalls)]));
           $("usageContent").hidden = false; showError($("usageError"), "");
-        } catch (error) { if (ticket === usageVersion) showError($("usageError"), error.message); }
+        } catch (error) {
+          if (ticket !== usageVersion) return;
+          if (rendering) $("usageContent").hidden = true;
+          showError($("usageError"), $("usageContent").hidden
+            ? error.message : `刷新失败，当前显示上次的统计。${error.message}`);
+        }
         finally { if (ticket === usageVersion) $("refreshUsage").disabled = false; }
       }
       let auditPage = 1;

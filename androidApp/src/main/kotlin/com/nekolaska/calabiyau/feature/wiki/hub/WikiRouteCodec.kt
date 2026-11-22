@@ -16,6 +16,7 @@ private fun decodeRoutePart(value: String?): String? {
 
 internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Home -> "home"
+    WikiRoute.QuickEntryEditor -> "quickEntryEditor"
     WikiRoute.Characters -> "characters"
     is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
         encodeRoutePart(
@@ -26,6 +27,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Weapons -> "weapons"
     is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(imageUrl)}"
     WikiRoute.Maps -> "maps"
+    is WikiRoute.ModeMaps -> "modeMaps$ROUTE_SEPARATOR${encodeRoutePart(templateName)}"
     is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
         encodeRoutePart(
             imageUrl
@@ -39,6 +41,12 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Activities -> "activities"
     WikiRoute.Announcements -> "announcements"
     WikiRoute.GameModes -> "gameModes"
+    WikiRoute.ExtractionHub -> "extractionHub"
+    WikiRoute.ExtractionMode -> "extractionMode"
+    WikiRoute.ExtractionSources -> "extractionSources"
+    WikiRoute.ExtractionGuns -> "extractionGuns"
+    WikiRoute.ExtractionArmor -> "extractionArmor"
+    WikiRoute.ExtractionWorkshop -> "extractionWorkshop"
     is WikiRoute.ExtractionCatalog -> "extractionCatalog|${kind.name}"
     WikiRoute.BalanceData -> "balanceData"
     WikiRoute.Voting -> "voting"
@@ -88,6 +96,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
     val parts = encoded.split(ROUTE_SEPARATOR)
     return when (parts.firstOrNull()) {
         "home" -> WikiRoute.Home
+        "quickEntryEditor" -> WikiRoute.QuickEntryEditor
         "characters" -> WikiRoute.Characters
         "charDetail" -> WikiRoute.CharDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
@@ -102,6 +111,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         )
 
         "maps" -> WikiRoute.Maps
+        "modeMaps" -> WikiRoute.ModeMaps(decodeRoutePart(parts.getOrNull(1)) ?: return null)
         "mapDetail" -> WikiRoute.MapDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
             imageUrl = decodeRoutePart(parts.getOrNull(2)),
@@ -115,6 +125,12 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "activities" -> WikiRoute.Activities
         "announcements" -> WikiRoute.Announcements
         "gameModes" -> WikiRoute.GameModes
+        "extractionHub" -> WikiRoute.ExtractionHub
+        "extractionMode" -> WikiRoute.ExtractionMode
+        "extractionSources" -> WikiRoute.ExtractionSources
+        "extractionGuns" -> WikiRoute.ExtractionGuns
+        "extractionArmor" -> WikiRoute.ExtractionArmor
+        "extractionWorkshop" -> WikiRoute.ExtractionWorkshop
         "extractionCatalog" -> ExtractionCatalogKind.entries.find { it.name == parts.getOrNull(1) }?.let { WikiRoute.ExtractionCatalog(it) }
         "balanceData" -> WikiRoute.BalanceData
         "voting" -> WikiRoute.Voting

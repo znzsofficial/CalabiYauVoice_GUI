@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,7 +46,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,13 +65,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.R
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import kotlinx.coroutines.launch
 
-private data class AboutVersionInfo(
+internal data class AboutVersionInfo(
     val name: String,
     val code: Long
 ) {
@@ -73,9 +82,9 @@ private data class AboutVersionInfo(
 }
 
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+internal fun rememberAppVersion(): AboutVersionInfo {
     val context = LocalContext.current
-    val versionInfo = remember(context) {
+    return remember(context) {
         try {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
             @Suppress("DEPRECATION")
@@ -85,24 +94,23 @@ fun AboutScreen(onBack: () -> Unit) {
                 info.versionCode.toLong()
             }
             AboutVersionInfo(
-                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.2.4",
+                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.2.5",
                 code = code
             )
         } catch (_: Exception) {
-            AboutVersionInfo(name = "2.2.4", code = 0L)
+            AboutVersionInfo(name = "2.2.5", code = 0L)
         }
     }
-
-    val pageBackground = MaterialTheme.colorScheme.background
-    AboutScaffold(onBack = onBack, versionLabel = versionInfo.label, pageBackground = pageBackground)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackground: Color) {
+fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
+    val version = rememberAppVersion()
     val scheme = MaterialTheme.colorScheme
+    val pageBackground = scheme.background
     val topBarProtection = aboutTextProtection(pageBackground, scheme.onSurface)
     val backBtnProtection = aboutTextProtection(scheme.surfaceContainerHigh, scheme.onSurface)
     val cardProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurface)
@@ -135,7 +143,7 @@ private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackgrou
                 }
                 Spacer(Modifier.width(AppSpacing.iconGap))
                 Text(
-                    "关于",
+                    SettingsPage.ABOUT.title,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = topBarProtection.foreground
@@ -148,6 +156,7 @@ private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackgrou
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = AppSpacing.screen)
@@ -160,6 +169,8 @@ private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackgrou
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                UpdateSettingsCard(version)
+                Spacer(Modifier.height(AppSpacing.sectionGap))
                 // Hero 卡片：网格渐变仅烘托顶部图标区并平滑淡入卡片底色，正文与标题无需零碎底框。
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -228,7 +239,7 @@ private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackgrou
                                 color = versionProtection.background
                             ) {
                                 Text(
-                                    text = versionLabel,
+                                    text = version.label,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Medium,
                                     color = versionProtection.foreground,
@@ -362,6 +373,59 @@ private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackgrou
                 )
             }
         }
+    }
+}
+
+private const val SHOW_SETTINGS_DEBUG_ITEM = false
+
+@Composable
+private fun UpdateSettingsCard(version: AboutVersionInfo) {
+    val context = LocalContext.current
+    val showSnack = rememberSnackbarLauncher()
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var available by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+
+    Surface(modifier = Modifier.fillMaxWidth(), shape = AppShapes.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column {
+            SettingsItem(
+                icon = if (checking) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
+                title = "检查更新",
+                subtitle = if (checking) "正在检查…" else status ?: "当前版本 ${version.name}",
+                onClick = {
+                    if (checking) return@SettingsItem
+                    checking = true
+                    scope.launch {
+                        try {
+                            when (val result = UpdateApi.checkUpdate(version.name, version.code)) {
+                                is UpdateApi.Result.NewVersion -> {
+                                    status = "发现新版本：${result.info.versionName}"
+                                    available = result.info
+                                    AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                }
+                                UpdateApi.Result.AlreadyLatest -> {
+                                    status = "已是最新版本 (${version.name})"
+                                    AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                }
+                                is UpdateApi.Result.Error -> status = result.message
+                            }
+                        } finally {
+                            checking = false
+                        }
+                    }
+                }
+            )
+            if (SHOW_SETTINGS_DEBUG_ITEM) SettingsDebugItem(currentVersion = version.name, showSnack = showSnack)
+        }
+    }
+    available?.let { info ->
+        UpdateAvailableDialog(
+            info = info, currentVersion = version.name, onDismiss = { available = null },
+            onOpenBrowser = {
+                openExternalUri(context, UpdateApi.resolveApkUrl(info).toUri(), onError = { showSnack("未找到可用的浏览器") })
+            }
+        )
     }
 }
 

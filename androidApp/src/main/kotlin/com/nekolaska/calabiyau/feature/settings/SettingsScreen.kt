@@ -1,10 +1,6 @@
 package com.nekolaska.calabiyau.feature.settings
 
-import android.content.Intent
-import android.os.Build
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
@@ -18,596 +14,208 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.DesktopWindows
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.SpaceDashboard
-import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material.icons.outlined.ViewDay
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
-import com.nekolaska.calabiyau.core.usage.UsageStats
-import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LocalThemeMode
 import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
 import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
-import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.feature.tools.formatFileSize
-import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
-import com.nekolaska.calabiyau.feature.wiki.hub.defaultQuickEntryIds
-import com.nekolaska.calabiyau.feature.wiki.hub.quickEntryById
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.nekolaska.calabiyau.core.usage.UsageStats
+import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 
-private enum class SettingsPage {
-    MAIN,
-    ABOUT,
-    STORAGE
+private val settingsNavigationSaver = listSaver<SettingsNavigation, String>(
+    save = { it.save() }, restore = { SettingsNavigation.restore(it) }
+)
+
+@Composable
+fun SettingsScreen(isActive: () -> Boolean = { true }, onBack: () -> Unit) {
+    var stack by rememberSaveable(stateSaver = settingsNavigationSaver) { mutableStateOf(SettingsNavigation()) }
+    val pages = rememberSaveableStateHolder()
+    var editorVisit by rememberSaveable { mutableIntStateOf(0) }
+    val current = stack.current
+    val previous = stack.previous
+    val transitionState = rememberPredictiveBackTransition(current)
+    var concurrency by remember { mutableIntStateOf(AppPrefs.maxConcurrency) }
+    var desktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
+    var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
+
+    fun back(from: SettingsPage) {
+        if (!isActive() || stack.current != from) return
+        if (from == SettingsPage.HOME) onBack() else stack = stack.pop(from)
+    }
+
+    // The editor alone owns cancellation/discard (including the system back gesture).
+    SeekablePredictiveBackHandler(
+        enabled = isActive() && previous != null && current != SettingsPage.QUICK_ENTRIES,
+        currentState = current,
+        targetState = previous ?: current,
+        transitionState = transitionState,
+        resolveTarget = { stack.previous.takeIf { stack.current == current } },
+        onCommit = { back(current) }
+    )
+    BackHandler(enabled = isActive() && current == SettingsPage.HOME) { back(SettingsPage.HOME) }
+
+    val transition = rememberTransition(transitionState.state, label = "SettingsNavigation")
+    transition.AnimatedContent(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        transitionSpec = {
+            val direction = if (targetState == initialState.parent) -1 else 1
+            (slideInHorizontally(tween(220)) { direction * it / 8 } + fadeIn(tween(220)))
+                .togetherWith(slideOutHorizontally(tween(150)) { -direction * it / 8 } + fadeOut(tween(150)))
+        }
+    ) { page ->
+        val open: (SettingsPage) -> Unit = open@{ next ->
+            if (!isActive()) return@open
+            val updated = stack.open(page, next)
+            if (updated !== stack && next == SettingsPage.QUICK_ENTRIES) editorVisit++
+            stack = updated
+        }
+        val pop = { back(page) }
+        pages.SaveableStateProvider(page.name) {
+            DisposableEffect(page) {
+                // Preserve ancestors during drill-down or a cancelled back preview, not popped drafts.
+                onDispose { if (page !in stack) pages.removeState(page.name) }
+            }
+            when (page) {
+                SettingsPage.QUICK_ENTRIES -> key(editorVisit) {
+                    val visit = editorVisit
+                    QuickEntryEditorScreen(isActive = { page == stack.current && visit == editorVisit && isActive() }, onBack = pop)
+                }
+                SettingsPage.ABOUT -> AboutScreen(onBack = pop)
+                SettingsPage.STORAGE -> StorageSettingsScreen(onBack = pop)
+                else -> SettingsPageLayout(page.title, pop) {
+                    when (page) {
+                        SettingsPage.HOME -> SettingsHome(concurrency, desktopMode, open)
+                        SettingsPage.APPEARANCE -> AppearanceSettingsSection(
+                            wallpaperAutoRefresh = wallpaperAutoRefresh,
+                            onOpenColors = { open(SettingsPage.COLORS) },
+                            onOpenWallpaper = { open(SettingsPage.WALLPAPER) }
+                        )
+                        SettingsPage.COLORS -> ColorSettingsSection()
+                        SettingsPage.WALLPAPER -> WallpaperSettingsSection(wallpaperAutoRefresh) {
+                            wallpaperAutoRefresh = it
+                            AppPrefs.wallpaperAutoRefresh = it
+                        }
+                        SettingsPage.DOWNLOADS -> DownloadSettingsSection(
+                            concurrency = concurrency,
+                            onConcurrencyChange = { concurrency = it; AppPrefs.maxConcurrency = it },
+                            onOpenStorage = { open(SettingsPage.STORAGE) }
+                        )
+                        SettingsPage.WIKI -> WikiAccountSettings(desktopMode) {
+                            desktopMode = it
+                            AppPrefs.wikiDesktopMode = it
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
-
-private const val SHOW_SETTINGS_DEBUG_ITEM = false
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    var savePath by remember { mutableStateOf(AppPrefs.savePath) }
-    var maxConcurrency by remember { mutableStateOf(AppPrefs.maxConcurrency.toString()) }
-    var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
-    var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
-    var homeQuickEntryLayout by remember { mutableIntStateOf(AppPrefs.homeQuickEntryLayout) }
-    var homeQuickEntryIds by remember {
-        mutableStateOf(
-            AppPrefs.homeQuickEntryIds.takeIf { it.isNotEmpty() } ?: defaultQuickEntryIds
-        )
-    }
-    var showQuickEntrySheet by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    val showSnack = rememberSnackbarLauncher()
-    var storageSnapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
-    var isStorageCalculating by remember { mutableStateOf(true) }
-    var storageRefreshKey by remember { mutableIntStateOf(0) }
-
-    fun refreshStorageSnapshot() {
-        storageRefreshKey++
-    }
-
-    LaunchedEffect(savePath, storageRefreshKey) {
-        isStorageCalculating = true
-        storageSnapshot = withContext(Dispatchers.IO) { computeStorageSnapshot(context, savePath) }
-        isStorageCalculating = false
-    }
-
-    val dirPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            val path = getWritablePathFromTreeUri(it)
-            if (path != null) {
-                savePath = path
-                AppPrefs.savePath = path
-                showSnack("已更新保存目录")
-            } else {
-                showSnack("此目录无法直接写入，需要本机可写目录")
-            }
-        }
-    }
-
-    val canPredictivePopToMain = currentPage != SettingsPage.MAIN
-    val transitionState = rememberPredictiveBackTransition(currentPage)
-
-    SeekablePredictiveBackHandler(
-        enabled = canPredictivePopToMain,
-        currentState = currentPage,
-        targetState = SettingsPage.MAIN,
-        transitionState = transitionState,
-        onCommit = { currentPage = SettingsPage.MAIN }
-    )
-    BackHandler(enabled = currentPage == SettingsPage.MAIN) {
-        onBack()
-    }
-
-    val settingsScrollState = rememberScrollState()
-
-    val animDuration = 300
-    val transition = rememberTransition(transitionState.state, label = "SettingsAboutTransition")
-    transition.AnimatedContent(
-        modifier = Modifier.background(MaterialTheme.colorScheme.background),
-        transitionSpec = {
-            if (targetState != SettingsPage.MAIN) {
-                (slideInHorizontally(tween(animDuration)) { it / 4 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 4 } + fadeOut(tween(animDuration / 2)))
-            } else {
-                (slideInHorizontally(tween(animDuration)) { -it / 4 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 4 } + fadeOut(tween(animDuration / 2)))
-            }
-        }
-    ) { page ->
-        if (page == SettingsPage.ABOUT) {
-            AboutScreen(onBack = { currentPage = SettingsPage.MAIN })
-            return@AnimatedContent
-        }
-        if (page == SettingsPage.STORAGE) {
-            StorageSettingsScreen(
-                snapshot = storageSnapshot,
-                isCalculating = isStorageCalculating,
-                onRefreshSnapshot = ::refreshStorageSnapshot,
-                onBack = { currentPage = SettingsPage.MAIN }
+private fun SettingsPageLayout(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, style = AppTextStyles.topBarTitle) },
+                navigationIcon = { BackNavButton(onClick = onBack) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
-            return@AnimatedContent
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { inner ->
+        Column(
+            Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner)
+                .verticalScroll(rememberScrollState())
+                .padding(top = AppSpacing.small, bottom = AppSpacing.xxxLarge)
+        ) { content() }
+    }
+}
+
+@Composable
+private fun SettingsHome(concurrency: Int, desktopMode: Boolean, open: (SettingsPage) -> Unit) {
+    val layout by AppPrefs.homeQuickEntryLayoutState.collectAsState()
+    val themeMode = LocalThemeMode.current.intValue
+    val version = rememberAppVersion()
+    SettingsCard {
+        SettingsItem(Icons.Outlined.GridView, SettingsPage.QUICK_ENTRIES.title,
+            if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) "按钮布局" else "网格布局") { open(SettingsPage.QUICK_ENTRIES) }
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.Palette, SettingsPage.APPEARANCE.title, themeModeLabel(themeMode)) { open(SettingsPage.APPEARANCE) }
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.Folder, SettingsPage.DOWNLOADS.title, "同时下载 $concurrency 项") { open(SettingsPage.DOWNLOADS) }
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.Language, SettingsPage.WIKI.title, if (desktopMode) "桌面版网页" else "移动版网页") { open(SettingsPage.WIKI) }
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.Info, SettingsPage.ABOUT.title, "当前版本 ${version.name}") { open(SettingsPage.ABOUT) }
+    }
+
+    Spacer(Modifier.height(AppSpacing.itemGap))
+    SettingsGroupHeader("隐私")
+    var statsEnabled by remember { mutableStateOf(AppPrefs.usageStatsEnabled) }
+    SettingsCard {
+        SettingsToggleItem(Icons.Outlined.Info, "匿名使用统计", "上报每日使用次数，不含账号", statsEnabled) {
+            statsEnabled = it
+            UsageStats.setEnabled(it)
         }
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("设置", style = AppTextStyles.topBarTitle) },
-                    navigationIcon = { BackNavButton(onClick = onBack) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
-                    )
-                )
+    }
+}
+
+@Composable
+private fun WikiAccountSettings(desktopMode: Boolean, onDesktopModeChange: (Boolean) -> Unit) {
+    var confirmLogout by rememberSaveable { mutableStateOf(false) }
+    SettingsCard {
+        SettingsToggleItem(Icons.Outlined.DesktopWindows, "桌面版网页", if (desktopMode) "开启" else "关闭", desktopMode, onDesktopModeChange)
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.DeleteSweep, "退出登录", "清除 Wiki 登录信息") { confirmLogout = true }
+    }
+    if (confirmLogout) {
+        SettingsDialog(
+            onDismissRequest = { confirmLogout = false },
+            title = { Text("退出登录") },
+            text = { Text("将清除 Wiki 登录信息。之后需要重新登录才能使用投票等功能。") },
+            confirmButton = {
+                FilledTonalButton(onClick = {
+                    WikiAuthHelper.clearLoginCookies()
+                    confirmLogout = false
+                }) { Text("确定清除") }
             },
-            containerColor = MaterialTheme.colorScheme.background
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding)
-                    .verticalScroll(settingsScrollState)
-            ) {
-                Spacer(Modifier.height(AppSpacing.xSmall))
-
-                // ═══════════════════════════════════
-                //  外观
-                // ═══════════════════════════════════
-                AppearanceSettingsSection()
-
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                // ═══════════════════════════════════
-                //  首页快捷入口
-                // ═══════════════════════════════════
-                SettingsGroupHeader("首页")
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.screen),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column {
-                        var showQuickLayoutDialog by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            icon = Icons.Outlined.GridView,
-                            title = "快捷入口",
-                            subtitle = when (homeQuickEntryLayout) {
-                                AppPrefs.HOME_QUICK_LAYOUT_BUTTONS -> "按钮"
-                                else -> "网格"
-                            },
-                            onClick = { showQuickLayoutDialog = true }
-                        )
-                        if (showQuickLayoutDialog) {
-                            SettingsSingleChoiceDialog(
-                                onDismissRequest = { showQuickLayoutDialog = false },
-                                title = "快捷入口",
-                                options = listOf(
-                                    AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格",
-                                    AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "按钮"
-                                ),
-                                selectedValue = homeQuickEntryLayout,
-                                onSelect = { layout ->
-                                    homeQuickEntryLayout = layout
-                                    AppPrefs.homeQuickEntryLayout = layout
-                                    showQuickLayoutDialog = false
-                                }
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-                        SettingsItem(
-                            icon = Icons.Outlined.SpaceDashboard,
-                            title = "自定义入口",
-                            subtitle = homeQuickEntryIds
-                                .mapNotNull(quickEntryById::get)
-                                .joinToString("、") { it.label }
-                                .ifBlank { "默认" },
-                            onClick = { showQuickEntrySheet = true }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                // ═══════════════════════════════════
-                //  下载
-                // ═══════════════════════════════════
-                SettingsGroupHeader("下载")
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.screen),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column {
-                        SettingsItem(
-                            icon = Icons.Outlined.Folder,
-                            title = "保存路径",
-                            subtitle = savePath,
-                            onClick = { dirPicker.launch(null) }
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-                        var showPathDialog by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            icon = Icons.Outlined.Edit,
-                            title = "自定路径",
-                            subtitle = "输入保存位置",
-                            onClick = { showPathDialog = true }
-                        )
-                        if (showPathDialog) {
-                            var tempPath by remember { mutableStateOf(savePath) }
-                            SettingsDialog(
-                                onDismissRequest = { showPathDialog = false },
-                                title = { Text("设置保存路径") },
-                                text = {
-                                    OutlinedTextField(
-                                        value = tempPath,
-                                        onValueChange = { tempPath = it },
-                                        label = { Text("路径") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = false,
-                                        maxLines = 3,
-                                        shape = AppShapes.compactCard
-                                    )
-                                },
-                                shape = AppShapes.dialog,
-                                confirmButton = {
-                                    FilledTonalButton(onClick = {
-                                        savePath = tempPath
-                                        AppPrefs.savePath = tempPath
-                                        showPathDialog = false
-                                    }) { Text("确定") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showPathDialog = false }) { Text("取消") }
-                                }
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-                        var showConcurrencyDialog by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            icon = Icons.Outlined.Speed,
-                            title = "同时下载",
-                            subtitle = maxConcurrency,
-                            onClick = { showConcurrencyDialog = true }
-                        )
-                        if (showConcurrencyDialog) {
-                            var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
-                            SettingsDialog(
-                                onDismissRequest = { showConcurrencyDialog = false },
-                                title = { Text("同时下载") },
-                                text = {
-                                    Column {
-                                        Text(
-                                            "可同时进行的下载数量，范围为 1 到 32。",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.height(AppSpacing.large))
-                                        OutlinedTextField(
-                                            value = tempConcurrency,
-                                            onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
-                                            label = { Text("并发数") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            shape = AppShapes.compactCard
-                                        )
-                                    }
-                                },
-                                shape = AppShapes.dialog,
-                                confirmButton = {
-                                    FilledTonalButton(onClick = {
-                                        val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
-                                        maxConcurrency = value.toString()
-                                        AppPrefs.maxConcurrency = value
-                                        showConcurrencyDialog = false
-                                    }) { Text("确定") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showConcurrencyDialog = false }) { Text("取消") }
-                                }
-                            )
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-                        var showBarStyleDialog by remember { mutableStateOf(false) }
-                        val barStyleName = when (bottomBarStyle) {
-                            AppPrefs.BAR_STYLE_DOCKED_TOOLBAR -> "悬浮工具栏"
-                            else -> "经典导航栏"
-                        }
-                        SettingsItem(
-                            icon = Icons.Outlined.ViewDay,
-                            title = "底栏样式",
-                            subtitle = barStyleName,
-                            onClick = { showBarStyleDialog = true }
-                        )
-                        if (showBarStyleDialog) {
-                            SettingsSingleChoiceDialog(
-                                onDismissRequest = { showBarStyleDialog = false },
-                                title = "底栏样式",
-                                options = listOf(
-                                    AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
-                                    AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
-                                ),
-                                selectedValue = bottomBarStyle,
-                                onSelect = { style ->
-                                    bottomBarStyle = style
-                                    AppPrefs.bottomBarStyle = style
-                                    showBarStyleDialog = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                // ═══════════════════════════════════
-                //  Wiki
-                // ═══════════════════════════════════
-                SettingsGroupHeader("Wiki")
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.screen),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column {
-                        var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
-                        SettingsToggleItem(
-                            icon = Icons.Outlined.DesktopWindows,
-                            title = "桌面版网页",
-                            subtitle = if (wikiDesktopMode) "开启" else "关闭",
-                            checked = wikiDesktopMode,
-                            onCheckedChange = {
-                                wikiDesktopMode = it
-                                AppPrefs.wikiDesktopMode = it
-                            }
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-
-                        var showClearCookieDialog by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            icon = Icons.Outlined.DeleteSweep,
-                            title = "退出登录",
-                            subtitle = "清除 Wiki 登录信息",
-                            onClick = { showClearCookieDialog = true }
-                        )
-                        if (showClearCookieDialog) {
-                            SettingsDialog(
-                                onDismissRequest = { showClearCookieDialog = false },
-                                title = { Text("退出登录") },
-                                text = { Text("将清除 Wiki 登录信息。之后需要重新登录才能使用投票等功能。") },
-                                shape = AppShapes.dialog,
-                                confirmButton = {
-                                    FilledTonalButton(onClick = {
-                                        com.nekolaska.calabiyau.core.wiki.WikiAuthHelper.clearLoginCookies()
-                                        showClearCookieDialog = false
-                                    }) { Text("确定清除") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showClearCookieDialog = false }) { Text("取消") }
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                // 存储统计
-                SettingsGroupHeader("存储")
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.screen),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column {
-                        SettingsItem(
-                            icon = Icons.Outlined.Info,
-                            title = "存储空间",
-                            subtitle = storageSnapshot?.let {
-                                "已用 ${formatFileSize(it.totalSize)}"
-                            } ?: "正在计算…",
-                            onClick = { currentPage = SettingsPage.STORAGE }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                SettingsGroupHeader("隐私")
-                var statsEnabled by remember { mutableStateOf(AppPrefs.usageStatsEnabled) }
-                Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen), shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    SettingsToggleItem(icon = Icons.Outlined.Info, title = "匿名使用统计",
-                        subtitle = "向自有服务器发送随机安装标识、版本和每日使用次数，不含账号或操作内容。",
-                        checked = statsEnabled, onCheckedChange = { statsEnabled = it; UsageStats.setEnabled(it) })
-                }
-                Spacer(Modifier.height(AppSpacing.itemGap))
-
-                // 关于分组
-                SettingsGroupHeader("关于")
-
-                val updateScope = rememberCoroutineScope()
-                var isCheckingUpdate by remember { mutableStateOf(false) }
-                var updateSubtitle by remember { mutableStateOf("检查新版本") }
-                var updateResult by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
-
-                val currentVersion = remember {
-                    try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.4"
-                    } catch (_: Exception) {
-                        "2.2.4"
-                    }
-                }
-                val currentVersionCode = remember {
-                    try {
-                        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                        @Suppress("DEPRECATION")
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            packageInfo.longVersionCode
-                        } else {
-                            packageInfo.versionCode.toLong()
-                        }
-                    } catch (_: Exception) {
-                        0L
-                    }
-                }
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.screen),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column {
-                        SettingsItem(
-                            icon = Icons.Outlined.Info,
-                            title = "关于",
-                            subtitle = "版本与版权",
-                            onClick = { currentPage = SettingsPage.ABOUT }
-                        )
-
-                        SettingsItem(
-                            icon = if (isCheckingUpdate) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
-                            title = "软件更新",
-                            subtitle = if (isCheckingUpdate) "正在检查…" else updateSubtitle,
-                            onClick = {
-                                if (isCheckingUpdate) return@SettingsItem
-                                isCheckingUpdate = true
-                                updateSubtitle = "正在检查…"
-                                updateScope.launch {
-                                    when (val result = UpdateApi.checkUpdate(currentVersion, currentVersionCode)) {
-                                        is UpdateApi.Result.NewVersion -> {
-                                            updateSubtitle = "发现新版本: ${result.info.versionName}"
-                                            updateResult = result.info
-                                            AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                        }
-
-                                        is UpdateApi.Result.AlreadyLatest -> {
-                                            updateSubtitle = "已是最新版本 ($currentVersion)"
-                                            AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                        }
-
-                                        is UpdateApi.Result.Error -> {
-                                            updateSubtitle = result.message
-                                        }
-                                    }
-                                    isCheckingUpdate = false
-                                }
-                            }
-                        )
-
-                        if (SHOW_SETTINGS_DEBUG_ITEM) {
-                            SettingsDebugItem(
-                                currentVersion = currentVersion,
-                                showSnack = showSnack
-                            )
-                        }
-                    }
-                }
-
-                // ── 新版本对话框 ──
-                updateResult?.let { info ->
-                    UpdateAvailableDialog(
-                        info = info,
-                        currentVersion = currentVersion,
-                        onDismiss = { updateResult = null },
-                        onOpenBrowser = {
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
-                            } catch (_: Exception) {
-                                showSnack("未找到可用的浏览器")
-                            }
-                        }
-                    )
-                }
-
-                Spacer(Modifier.height(AppSpacing.xxxLarge))
-            }
-        }
-    } // AnimatedContent
-
-    if (showQuickEntrySheet) {
-        val sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("取消") } }
         )
-        ModalBottomSheet(
-            onDismissRequest = { showQuickEntrySheet = false },
-            sheetState = sheetState
-        ) {
-            QuickEntryCustomizeSheet(
-                selectedIds = homeQuickEntryIds,
-                onSelectedIdsChange = {
-                    homeQuickEntryIds = it
-                    AppPrefs.homeQuickEntryIds = it
-                },
-                onClose = { showQuickEntrySheet = false }
-            )
-        }
     }
 }

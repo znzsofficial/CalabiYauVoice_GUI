@@ -21,15 +21,19 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 @Composable
 internal fun ExtractionDropCard(
     modifier: Modifier = Modifier, entry: ExtractionEntry, query: String = "",
+    isContainer: Boolean = false, sharedPool: ExtractionEntry? = null,
     artwork: DropArtworkIndex = DropArtworkIndex.Empty, onClick: () -> Unit
 ) {
-    val evidence = remember(entry, query) { extractionDropMatchEvidence(entry, query) }
-    val previewItem = remember(entry, evidence, artwork, query) {
-        val candidates = if (query.isNotBlank()) evidence?.items.orEmpty() else entry.dropPoolGroups.flatMap { group ->
-            group.items.map { ExtractionDropItem(it, group.label, group.qualityCode) }
+    val groups = sharedPool?.dropPoolGroups ?: entry.dropPoolGroups
+    val evidence = remember(entry, query, groups) { extractionDropMatchEvidence(entry, query, groups) }
+    val previewItem = remember(groups, evidence, artwork, query) {
+        val candidates = if (query.isNotBlank()) evidence?.items.orEmpty().take(1).asSequence() else groups.asSequence().flatMap { group ->
+            group.items.asSequence().map { ExtractionDropItem(it, group.label, group.qualityCode) }
         }
         candidates.firstNotNullOfOrNull { item -> artwork.imageFor(item.name, item.qualityLabel)?.let { item to it } }
     }
+    val poolSummary = dropCandidateSummary(entry, isContainer, sharedPool)
+    val isZero = entry.dropCountState == DropCountState.ZERO
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -41,68 +45,67 @@ internal fun ExtractionDropCard(
             else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
         )
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ExtractionDropSourceIconBox(entry)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    val subtitle = buildList {
-                        add(entry.category)
-                        addAll(entry.tags)
-                        if (entry.dropPoolGroups.isNotEmpty()) add("${entry.dropPoolGroups.sumOf { it.items.size }} 项候选")
-                    }.filter { it.isNotBlank() }.distinct().joinToString(" · ")
+                    Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                        maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        color = if (evidence?.isNameMatch == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    val subtitle = (listOfNotNull(poolSummary, entry.category) + entry.tags)
+                        .filter { it.isNotBlank() && it != entry.name }.distinct().joinToString("，")
                     if (subtitle.isNotBlank()) {
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (entry.dropCountState == DropCountState.ZERO) {
-                Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.errorContainer) {
-                    Text(
-                        "无物品掉落 · 0 件",
-                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontWeight = FontWeight.SemiBold
-                    )
+            if (isZero || (isContainer && entry.dropCountState == DropCountState.UNKNOWN)) DropCountStatus(entry)
+            val preview = when {
+                evidence != null -> evidence.caption
+                previewItem != null -> "候选物品：${previewItem.first.name}（${previewItem.first.qualityLabel}）"
+                !isContainer -> entry.fields.firstOrNull {
+                    it.label in setOf("候选池", "阈值", "必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）", "掉落件数")
+                }?.let { "${it.label}：${it.value}" }
+                else -> null
+            }
+            if (preview != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                previewItem?.let { (item, url) ->
+                    ExtractionDropThumbnail(item.qualityCode ?: -1, url, Modifier.size(36.dp))
                 }
-            }
-            if (evidence != null) {
-                Surface(
-                    shape = AppShapes.chip,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(evidence.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Text(evidence.snippet, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-            previewItem?.let { (item, url) ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ExtractionDropThumbnail(item.name, item.qualityLabel, item.qualityCode ?: 0, url, Modifier.size(40.dp))
-                    Text(
-                        "${item.name}（${item.qualityLabel}）",
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            entry.fields.firstOrNull { it.label in setOf("掉落件数", "件数概率", "阈值") }?.let {
-                Text("${it.label}：${it.value}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (evidence == null) {
-                val preview = if (entry.type == ExtractionEntryType.DROP_STAGE) {
-                    entry.fields.firstOrNull { it.label == "候选池" }?.let { "候选池 · ${it.value}" }
-                } else if (entry.dropPoolGroups.isEmpty()) {
-                    entry.fields.firstOrNull { it.label in setOf("必掉物", "掉落材料（按权重抽）", "掉落池条目（完整）", "掉落池内最高权重") }
-                        ?.let { "${it.label} · ${it.value}" }
-                } else null
-                preview?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) }
+                Text(preview, style = MaterialTheme.typography.bodyMedium,
+                    color = if (evidence != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
+
+@Composable
+internal fun DropCountStatus(entry: ExtractionEntry) {
+    val colors = MaterialTheme.colorScheme
+    val zero = entry.dropCountState == DropCountState.ZERO
+    val unknown = entry.dropCountState == DropCountState.UNKNOWN
+    val label = when (entry.dropCountState) {
+        DropCountState.ZERO -> "掉落 0 件"
+        DropCountState.UNKNOWN -> "掉落件数未知"
+        DropCountState.POSITIVE -> entry.fields.firstOrNull { it.label == "件数概率" }?.let { "件数概率：${it.value}" } ?: return
+    }
+    Surface(shape = AppShapes.chip, color = when { zero -> colors.errorContainer; unknown -> colors.secondaryContainer; else -> colors.surfaceContainerHigh }) {
+        Text(label, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium,
+            color = when { zero -> colors.onErrorContainer; unknown -> colors.onSecondaryContainer; else -> colors.onSurfaceVariant },
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** An explicitly empty pool and an unpublished table row are different player-facing states. */
+internal fun dropCandidateSummary(entry: ExtractionEntry, isContainer: Boolean, sharedPool: ExtractionEntry? = null): String? {
+    val groups = sharedPool?.dropPoolGroups ?: entry.dropPoolGroups
+    return when {
+        isContainer && entry.containerId == null -> "候选物品尚未公布"
+        groups.isNotEmpty() || isContainer || sharedPool != null -> "${groups.sumOf { it.items.size }} 项候选物品"
+        else -> null
     }
 }
 

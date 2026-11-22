@@ -82,6 +82,8 @@ Parser robustness checklist:
 - Returns `ApiResult.Success` with `isOffline` and `cacheAgeMs` from the source result.
 - Returns `ApiResult.Error` with meaningful `ErrorKind` values.
 
+Every `imageinfo` request needs `redirects=1`. A single-file lookup can read the returned page directly. In a batch, `query.pages` lists the target titles: resolve each `query.redirects[].to` there and also index its URL under `from`, so callers can still look up the requested filename. For example, `武器-大剑.png` resolves to `武器外观图鉴 15701001.png`. Keep this mapping in both `fetchBatchImageUrls` (lists and galleries) and `CharacterDetailApi.fetchImageUrls` (skill icons and story covers).
+
 Typical API flow:
 
 ```kotlin

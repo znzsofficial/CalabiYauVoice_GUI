@@ -79,6 +79,11 @@ class ExtractionDrop120524Test {
         val pool = assertNotNull(linkedDropSharedPool(ammo, data))
         val rawNote = pool.field("物品池说明")
         assertContains(rawNote, "从高到低")
+        val record = dropSourceRecords(emptyList(), data).single { it.entry == ammo }
+        assertEquals(ammo, record.matchingRecord("伏闪", data)?.entry)
+        assertEquals("候选物品：伏闪（Q8 特殊）", extractionDropMatchEvidence(ammo, "伏闪", pool.dropPoolGroups)?.caption)
+        assertNull(record.matchingRecord("从高到低", data))
+        assertNull(record.matchingRecord("空投", data))
         val view = sourcePoolDetail(ammo, pool)
         assertEquals(pool.dropPoolGroups, view.dropPoolGroups)
         assertFalse(view.matches("从高到低"))

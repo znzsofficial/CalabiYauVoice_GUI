@@ -1,16 +1,19 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropTask
 import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
 sealed interface WikiRoute {
     data object Home : WikiRoute
+    data object QuickEntryEditor : WikiRoute
     data object Characters : WikiRoute
     data class CharDetail(val name: String, val portrait: String?, val source: String = "list") : WikiRoute
     data object Weapons : WikiRoute
     data class WeaponDetail(val name: String, val imageUrl: String? = null) : WikiRoute
     data object Maps : WikiRoute
+    data class ModeMaps(val templateName: String) : WikiRoute
     data class MapDetail(val name: String, val imageUrl: String?, val source: String = "list") : WikiRoute
     data object Items : WikiRoute
     data object MobileItems : WikiRoute
@@ -19,6 +22,12 @@ sealed interface WikiRoute {
     data object Activities : WikiRoute
     data object Announcements : WikiRoute
     data object GameModes : WikiRoute
+    data object ExtractionHub : WikiRoute
+    data object ExtractionMode : WikiRoute
+    data object ExtractionSources : WikiRoute
+    data object ExtractionGuns : WikiRoute
+    data object ExtractionArmor : WikiRoute
+    data object ExtractionWorkshop : WikiRoute
     data class ExtractionCatalog(val kind: ExtractionCatalogKind) : WikiRoute
     data object BalanceData : WikiRoute
     data object Voting : WikiRoute
@@ -62,6 +71,11 @@ sealed interface WikiRoute {
     data object DecorationHub : WikiRoute
     data object CatalogHub : WikiRoute
     data object ExtensionHub : WikiRoute
+}
+
+internal fun DropTask.toWikiRoute(): WikiRoute = when (this) {
+    DropTask.ITEMS -> WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
+    DropTask.SOURCES -> WikiRoute.ExtractionSources
 }
 
 internal val WikiRoute.isDetailRoute: Boolean

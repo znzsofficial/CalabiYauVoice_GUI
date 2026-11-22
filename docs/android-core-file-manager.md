@@ -49,7 +49,7 @@
   行组件使用已加载的元数据，不在重组中反复 listFiles。
 - 两个图片画廊入口共用 `managedGalleryFiles`，既检查图片扩展名也排除目录。
 - 资源下载页不再提供运行日志按钮/弹窗；底层仍保留最多 1000 条诊断消息，进度、失败重试与下载历史不受影响。
-- 更新 APK 保存在应用私有外部目录。安装前将目标 versionCode、版本名和 APK 路径同步写入 SharedPreferences；下次启动确认已升级且 DownloadManager 状态可核实时，只清理这一个 APK，并移除对应任务记录。
+- 更新 APK 保存在应用私有外部目录。安装前将目标 versionCode、版本名和 APK 路径同步写入 SharedPreferences；下次启动由 PackageManager 确认已安装版本达到目标，且 DownloadManager 能排除该路径仍在下载时，才清理记录中的 APK 并移除对应任务记录。
   启动时还迁移清理旧版本遗留的 app-owned updater APK：必须满足文件名、APK 包名和 archive versionCode 均匹配；活跃下载、未来版本、外部/嵌套路径、非 updater 文件、其他包 APK，以及 DownloadManager 状态未知时保留。
   未安装（包括取消或安装失败）时保留 APK 以便重试。外部私有目录不可用时不再把内部 `filesDir` 错传给 DownloadManager。
 

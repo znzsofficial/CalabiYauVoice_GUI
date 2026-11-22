@@ -254,6 +254,14 @@ object OfflineCache {
         forceRefresh: Boolean = false,
         validatePayload: (String) -> Boolean = { true },
         networkFetch: suspend () -> String?
+    ): CacheResult? = fetchWithPolicy(type, key, forceRefresh, validatePayload) { ticket ->
+        doFetch(type, key, ticket, validatePayload, networkFetch)
+    }
+
+    /** Keep a source-specific read policy inside the existing single flight and write generation. */
+    internal suspend fun fetchWithPolicy(
+        type: Type, key: String, forceRefresh: Boolean, validatePayload: (String) -> Boolean,
+        fetch: suspend (WriteTicket) -> CacheResult?
     ): CacheResult? {
         // 强制刷新走独立命名空间，避免搭便车拿到旧数据；
         // 也避免强制刷新的 Deferred 覆盖非强制请求者正在等待的结果
@@ -277,7 +285,7 @@ object OfflineCache {
                         generation(type, key)
                     } else requestedGeneration
                 } ?: return@withLock getEntry(type, key)?.takeIf { validatePayload(it.content) }?.toCacheResult()
-                val result = doFetch(type, key, cacheGeneration, validatePayload, networkFetch)
+                val result = fetch(cacheGeneration)
                 if (result == null && ::appContext.isInitialized) {
                     CrashContextStore.record(
                         appContext,
@@ -315,11 +323,7 @@ object OfflineCache {
         validatePayload: (String) -> Boolean,
         networkFetch: suspend () -> String?
     ): CacheResult? {
-        val route = try {
-            NetworkMonitor.defaultRoute(appContext)
-        } catch (_: Exception) {
-            NetworkMonitor.Route.UNVALIDATED
-        }
+        val route = defaultRoute()
 
         return fetchValidatedCachePayload(route == NetworkMonitor.Route.VALIDATED,
             tryNetworkOnMiss = route == NetworkMonitor.Route.UNVALIDATED, network = {
@@ -343,6 +347,12 @@ object OfflineCache {
 
     private fun CacheEntry.toCacheResult(): CacheResult =
         CacheResult(payload = content, isFromCache = true, ageMs = ageMs)
+
+    internal fun defaultRoute() = try {
+        NetworkMonitor.defaultRoute(appContext)
+    } catch (_: Exception) {
+        NetworkMonitor.Route.UNVALIDATED
+    }
 
     private suspend fun putIfCurrent(
         type: Type,

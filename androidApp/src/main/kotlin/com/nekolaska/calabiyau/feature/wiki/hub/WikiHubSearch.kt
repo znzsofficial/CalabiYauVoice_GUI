@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GpsFixed
@@ -95,7 +96,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-private data class HubSearchEntry(
+internal data class HubSearchEntry(
     val id: String,
     val title: String,
     val subtitle: String,
@@ -141,7 +142,7 @@ private object HubWeaponSearchIndex {
     }
 }
 
-private enum class SearchEntryKind {
+internal enum class SearchEntryKind {
     Character,
     Weapon,
     Map,
@@ -285,9 +286,14 @@ private val hubSearchEntries = listOf(
         "game_modes",
         "战斗模式",
         "查看所有战斗模式详情",
-        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式", "超弦推进模式", "弦溯战线", "搜打撤", "撤离"),
+        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式", "超弦推进模式"),
         Icons.Outlined.SportsEsports,
         WikiRoute.GameModes
+    ),
+    searchEntry(
+        "extraction_hub", "弦溯战线", "物资、装备与掉落",
+        listOf("弦溯战线专题", "搜打撤", "搜打撤专题", "撤离"),
+        Icons.Outlined.Explore, WikiRoute.ExtractionHub
     ),
     searchEntry(
         "extraction_loot", "弦溯战线物资图鉴", "材料、消耗品、收藏品、弹药、背包与钥匙卡",
@@ -296,14 +302,34 @@ private val hubSearchEntries = listOf(
         Icons.Outlined.Inventory2, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT)
     ),
     searchEntry(
-        "extraction_attachments", "弦溯战线配件", "搜打撤配件图鉴 · 槽位、实际效果与适用武器",
-        listOf("弦溯战线", "搜打撤", "配件图鉴", "搜打撤配件", "弦溯战线配件图鉴"),
+        "extraction_guns", "弦溯战线枪械图鉴", "伤害、射速与弹匣容量",
+        listOf("枪械图鉴", "搜打撤枪械", "搜打撤枪械图鉴", "弦溯战线枪械图鉴"),
+        Icons.Outlined.GpsFixed, WikiRoute.ExtractionGuns
+    ),
+    searchEntry(
+        "extraction_armor", "弦溯战线防具图鉴", "护甲、生命与占格",
+        listOf("防具图鉴", "搜打撤防具", "搜打撤防具图鉴", "弦溯战线防具图鉴"),
+        Icons.Outlined.Inventory2, WikiRoute.ExtractionArmor
+    ),
+    searchEntry(
+        "extraction_workshop", "弦溯战线工坊", "制作配方、舱室升级与派驻",
+        listOf("工坊", "搜打撤工坊", "舱室", "制作配方"),
+        Icons.Outlined.Extension, WikiRoute.ExtractionWorkshop
+    ),
+    searchEntry(
+        "extraction_attachments", "弦溯战线配件图鉴", "槽位、效果与适用武器",
+        listOf("弦溯战线", "搜打撤", "配件图鉴", "搜打撤配件", "搜打撤配件图鉴", "弦溯战线配件图鉴"),
         Icons.Outlined.GpsFixed, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS)
     ),
     searchEntry(
-        "extraction_drops", "弦溯战线掉落", "晶源体、首领与场景容器的掉落资料",
-        listOf("弦溯战线", "搜打撤", "掉落图鉴", "搜打撤掉落", "弦溯战线掉落图鉴"),
+        "extraction_drops", "弦溯战线掉落查询", "各品质物品的掉落来源",
+        listOf("弦溯战线", "搜打撤", "掉落查询", "掉落图鉴", "搜打撤掉落", "搜打撤掉落图鉴", "弦溯战线掉落图鉴", "找物品", "按物品"),
         Icons.Outlined.Inventory2, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
+    ),
+    searchEntry(
+        "extraction_sources", "弦溯战线掉落来源", "晶源体、首领与容器的候选物品",
+        listOf("查来源", "按来源", "掉落来源", "搜打撤查来源"),
+        Icons.Outlined.Explore, WikiRoute.ExtractionSources
     ),
     searchEntry(
         "achievements",
@@ -622,6 +648,7 @@ internal fun HubSearchPanel(
     factions: List<CharacterListApi.FactionData> = emptyList(),
     gameModes: List<GameModeData> = emptyList(),
     isIndexLoading: Boolean = false,
+    isPageActive: Boolean = true,
     backdrop: Backdrop = emptyBackdrop(),
 ) {
     val textFieldState = rememberTextFieldState(query)
@@ -650,13 +677,13 @@ internal fun HubSearchPanel(
         onNavigateTo(entry.targetRoute)
     }
 
-    BackHandler(enabled = searchActive) { collapseSearch() }
+    BackHandler(enabled = searchActive && isPageActive) { collapseSearch() }
 
     val weaponSnapshot = HubListDataSnapshot.weaponCategories
     val snapshotGeneration = HubListDataSnapshot.generation
-    LaunchedEffect(searchActive, snapshotGeneration, weaponSnapshot) {
+    LaunchedEffect(searchActive, isPageActive, snapshotGeneration, weaponSnapshot) {
         weaponCategories = HubWeaponSearchIndex.cached()
-        if (!searchActive) return@LaunchedEffect
+        if (!searchActive || !isPageActive) return@LaunchedEffect
         isLoadingWeapons = true
         try {
             val loadedCategories = HubWeaponSearchIndex.load()
@@ -784,8 +811,12 @@ internal fun HubSearchPanel(
                                     groupedResults.relatedWeapons,
                                     ::selectResult
                                 )
-                                SearchResultSection("地图", groupedResults.maps, ::selectResult)
+                                // The mode directory and a map-mode filter can have the same title.
+                                val entryBeforeMaps = groupedResults.entries.firstOrNull()?.title == normalizedQuery &&
+                                    groupedResults.maps.any { it.kind == SearchEntryKind.MapMode && it.title == normalizedQuery }
+                                if (!entryBeforeMaps) SearchResultSection("地图", groupedResults.maps, ::selectResult)
                                 SearchResultSection("入口", groupedResults.entries, ::selectResult)
+                                if (entryBeforeMaps) SearchResultSection("地图", groupedResults.maps, ::selectResult)
                             }
                         }
                     }
@@ -795,7 +826,7 @@ internal fun HubSearchPanel(
     }
 }
 
-private fun buildDynamicSearchEntries(
+internal fun buildDynamicSearchEntries(
     factions: List<CharacterListApi.FactionData>,
     weaponCategories: List<WeaponListApi.WeaponCategoryData>,
     gameModes: List<GameModeData>,
@@ -855,7 +886,7 @@ private fun buildDynamicSearchEntries(
                 id = "map_${map.name}",
                 title = map.name,
                 subtitle = subtitle,
-                keywords = listOf(map.name, mode.displayName, "地图", "场景", "点位", "地图详情"),
+                keywords = (existing?.keywords.orEmpty() + listOf(map.name, mode.displayName, "地图", "场景", "点位", "地图详情")).distinct(),
                 icon = Icons.Outlined.Map,
                 targetRoute = WikiRoute.MapDetail(
                     map.name,
@@ -886,7 +917,7 @@ private fun buildDynamicSearchEntries(
             subtitle = "地图模式 · ${mode.maps.size} 张地图",
             keywords = listOf(mode.displayName, mode.templateName, "地图", "模式地图"),
             icon = Icons.Outlined.Map,
-            targetRoute = WikiRoute.Maps,
+            targetRoute = WikiRoute.ModeMaps(mode.templateName),
             kind = SearchEntryKind.MapMode,
         )
     } else MapListApi.GAME_MODES.map { (displayName, templateName) ->
@@ -896,7 +927,7 @@ private fun buildDynamicSearchEntries(
             subtitle = "地图模式",
             keywords = listOf(displayName, templateName, "地图", "模式地图"),
             icon = Icons.Outlined.Map,
-            targetRoute = WikiRoute.Maps,
+            targetRoute = WikiRoute.ModeMaps(templateName),
             kind = SearchEntryKind.MapMode,
         )
     }
@@ -949,17 +980,15 @@ private fun buildGroupedSearchResults(
         .filter { it.kind == SearchEntryKind.Map || it.kind == SearchEntryKind.MapMode }
         .rankedMatches(query)
         .take(5)
-    val entries = hubSearchEntries
-        .rankedMatches(query)
-        .take(4)
-
     return GroupedSearchResults(
         characters = characters,
         relatedWeapons = relatedWeapons + directWeapons,
         maps = maps,
-        entries = entries,
+        entries = matchingHubEntries(query),
     )
 }
+
+internal fun matchingHubEntries(query: String): List<HubSearchEntry> = hubSearchEntries.rankedMatches(query).take(4)
 
 private fun List<HubSearchEntry>.rankedMatches(query: String): List<HubSearchEntry> {
     return mapNotNull { entry ->

@@ -1,6 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction.model
 
+import util.wikiPathEncode
+
 const val EXTRACTION_MODE_PAGE = "战斗模式/弦溯战线"
+
+internal fun extractionArticleUrl(page: String) = "https://wiki.biligame.com/klbq/" +
+    page.split('/').joinToString("/") { it.wikiPathEncode() }
 
 enum class ExtractionCatalogKind(val title: String, val pageSuffix: String) {
     LOOT("物资图鉴", "物资图鉴"),

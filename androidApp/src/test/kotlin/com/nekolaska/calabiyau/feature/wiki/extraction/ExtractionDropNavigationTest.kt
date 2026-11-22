@@ -7,6 +7,17 @@ import kotlinx.serialization.decodeFromString
 import kotlin.test.*
 
 class ExtractionDropNavigationTest {
+    @Test fun directSourcesEntryRestoresToItsOwnRootWithoutAnItemsStop() {
+        val root = DropNavigation(DropTask.SOURCES)
+        val fromSource = root.openSource("boss-a", "关键词")
+        val exploring = fromSource.openItem(ExtractionDropItem("材料", "Q8", 8))
+        val restored = SharedJson.decodeFromString<DropNavigation>(SharedJson.encodeToString(exploring))
+        assertEquals(fromSource, restored.back())
+        val returned = restored.back().back()
+        assertEquals(DropTask.SOURCES, returned.current.task)
+        assertFalse(returned.canGoBack)
+    }
+
     @Test fun itemSourcesBackRestoresTheListBeforeLeavingTheCatalog() {
         val root = DropNavigation()
         val item = root.openItem(ExtractionDropItem("切割器", "卓越", 3))

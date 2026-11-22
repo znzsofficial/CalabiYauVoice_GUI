@@ -380,7 +380,7 @@ fun MainScreen(
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
                         showDrawerButton = !useExpandedLayout,
-                        isOverlaid = hubWebViewUrl != null || currentDestination != DrawerDestination.WIKI_HUB,
+                        isOverlaid = hubWebViewUrl != null || drawerState.isOpen || currentDestination != DrawerDestination.WIKI_HUB,
                         initialPage = hubStartPage,
                         resetKey = hubResetToken,
                         onOpenWikiUrl = { url ->
@@ -489,6 +489,7 @@ fun MainScreen(
 
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(
+                    isActive = { currentDestination == DrawerDestination.SETTINGS && !drawerState.isOpen },
                     onBack = { openWikiHub(resetStack = false) }
                 )
             }

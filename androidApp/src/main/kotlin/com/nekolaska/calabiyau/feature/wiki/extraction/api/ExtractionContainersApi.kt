@@ -16,20 +16,20 @@ internal class ExtractionContainersApi(
     private val disk: suspend () -> WikiHtmlPageSourceResult? = ExtractionCatalogRemoteSource::readContainersCache,
     private val network: suspend (Boolean) -> WikiHtmlPageSourceResult? = ExtractionCatalogRemoteSource::fetchContainers
 ) : CachedWikiApi<List<ExtractionEntry>>("ExtractionContainers") {
-    override suspend fun fetchFromCache(): ApiResult<List<ExtractionEntry>> = ioApiCall("读取完整池失败") {
+    override suspend fun fetchFromCache(): ApiResult<List<ExtractionEntry>> = ioApiCall("离线掉落表读取失败") {
         parse(disk(), true)
     }
 
-    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<ExtractionEntry>> = ioApiCall("获取完整池失败") {
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<ExtractionEntry>> = ioApiCall("掉落表加载失败") {
         parse(network(forceRefresh), false)
     }
 
     private fun parse(source: WikiHtmlPageSourceResult?, cached: Boolean): ApiResult<List<ExtractionEntry>> {
-        source ?: return ApiResult.Error("完整掉落表暂不可用，且无离线缓存", kind = ErrorKind.NETWORK)
+        source ?: return ApiResult.Error(if (cached) "暂无掉落表离线副本" else "掉落表加载失败，暂无离线副本", kind = ErrorKind.NETWORK)
         val result = ExtractionContainerParser.parseResult(source.html)
         if (!result.canCache) {
             WikiParseLogger.warnMalformed("ExtractionContainers", result.issues.take(8).joinToString("; "), source.html)
-            return ApiResult.Error("暂时无法显示完整掉落表", kind = ErrorKind.PARSE)
+            return ApiResult.Error("掉落表内容不完整", kind = ErrorKind.PARSE)
         }
         return ApiResult.Success(result.entries, isOffline = cached || source.isFromCache, cacheAgeMs = source.ageMs)
     }

@@ -72,7 +72,14 @@ import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
+import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.extraction.ExtractionCatalogScreen
+import com.nekolaska.calabiyau.feature.settings.QuickEntryEditorScreen
+import com.nekolaska.calabiyau.feature.wiki.extraction.equipment.EquipmentKind
+import com.nekolaska.calabiyau.feature.wiki.extraction.equipment.ExtractionEquipmentScreen
+import com.nekolaska.calabiyau.feature.wiki.extraction.workshop.ExtractionWorkshopScreen
+import com.nekolaska.calabiyau.feature.wiki.extraction.ExtractionDropsScreen
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropTask
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.imprint.ImprintScreen
 import com.nekolaska.calabiyau.feature.wiki.interactionitem.InteractionItemScreen
@@ -269,7 +276,7 @@ fun WikiHubScreen(
     val mapState = rememberLoadState(
         initial = restoredModes ?: emptyList<GameModeData>(),
         key = snapshotGeneration,
-        enabled = backStack.any { it is WikiRoute.Home || it is WikiRoute.Maps || it is WikiRoute.GameModes || it is WikiRoute.Navigation },
+        enabled = backStack.any { it is WikiRoute.Home || it is WikiRoute.Maps || it is WikiRoute.ModeMaps || it is WikiRoute.GameModes || it is WikiRoute.Navigation },
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MapListApi.fetchAllModes(cacheOnly = true) },
         fetch = { force -> HubListDataSnapshot.capture("maps",
@@ -312,6 +319,7 @@ fun WikiHubScreen(
     val routeStates = key(resetKey) { rememberSaveableStateHolder() }
     val retainedRoutes by rememberUpdatedState(backStack)
     val overlayVisible by rememberUpdatedState(isOverlaid)
+    var editorVisit by rememberSaveable(resetKey) { mutableIntStateOf(0) }
 
     fun popRoute() {
         if (backStack.size > 1) {
@@ -321,11 +329,13 @@ fun WikiHubScreen(
 
     fun pushRoute(route: WikiRoute) {
         if (backStack.lastOrNull() == route) return
+        if (route == WikiRoute.QuickEntryEditor) editorVisit++
         backStack = backStack + route
     }
 
     val previousRoute = backStack.getOrNull(backStack.lastIndex - 1)
     val canPredictivePop = !isOverlaid &&
+        currentRoute != WikiRoute.QuickEntryEditor &&
         previousRoute != null &&
         !currentRoute.isDetailRoute &&
         !previousRoute.isDetailRoute
@@ -342,7 +352,7 @@ fun WikiHubScreen(
         resolveTarget = { backStack.getOrNull(backStack.lastIndex - 1)?.let { HubTransitionTarget(it, backStack.lastIndex - 1) } }
     )
 
-    BackHandler(enabled = backStack.size > 1 && !isOverlaid && !canPredictivePop) {
+    BackHandler(enabled = backStack.size > 1 && !isOverlaid && !canPredictivePop && currentRoute != WikiRoute.QuickEntryEditor) {
         popRoute()
     }
 
@@ -397,10 +407,12 @@ fun WikiHubScreen(
             val route = page.route
             // AnimatedContent retains outgoing pages. Their callbacks must not mutate the new stack.
             fun isCurrentPage() = backStack.lastIndex == page.depth && backStack.lastOrNull() == route
-            fun popBackStack() { if (isCurrentPage()) popRoute() }
-            fun navigateTo(next: WikiRoute) { if (isCurrentPage()) pushRoute(next) }
+            fun isPageInteractive() = isCurrentPage() && !overlayVisible
+            fun openCurrentWiki(url: String) { if (isPageInteractive()) onOpenWikiUrl(url) }
+            fun popBackStack() { if (isPageInteractive()) popRoute() }
+            fun navigateTo(next: WikiRoute) { if (isPageInteractive()) pushRoute(next) }
             fun navigateToMapDetail(name: String, imageUrl: String?, source: String = "list") {
-                if (isCurrentPage()) openMapDetail(name, imageUrl, source)
+                if (isPageInteractive()) openMapDetail(name, imageUrl, source)
             }
             val routeKey = route.encode()
             routeStates.SaveableStateProvider(routeKey) {
@@ -437,6 +449,7 @@ fun WikiHubScreen(
                     onHomeFactionChanged = { homeFactionTab = it },
                     selectedHomeMapMode = homeMapModeTab,
                     onHomeMapModeChanged = { homeMapModeTab = it },
+                    isPageActive = isPageInteractive(),
                     backdrop = hubBackdrop,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
@@ -521,7 +534,8 @@ fun WikiHubScreen(
                 )
             }
 
-            is WikiRoute.Maps -> {
+            WikiRoute.Maps, is WikiRoute.ModeMaps -> {
+                var template by rememberSaveable { mutableStateOf((route as? WikiRoute.ModeMaps)?.templateName) }
                 MapListFullScreen(
                     onBack = { popBackStack() },
                     onOpenMapDetail = { name, imageUrl ->
@@ -532,8 +546,12 @@ fun WikiHubScreen(
                     error = mapState.error?.message,
                     offlineAge = mapState.cacheAgeMs.takeIf { mapState.isOffline && !mapState.isShowingCachedPrefetch },
                     onRetry = { mapState.reload(forceRefresh = true) },
-                    initialTab = mapListTab,
-                    onTabChanged = { mapListTab = it },
+                    selectedTab = if (route is WikiRoute.ModeMaps) gameModes.indexOfFirst { it.templateName == template } else mapListTab,
+                    onTabChanged = { index ->
+                        if (isPageInteractive()) {
+                            if (route is WikiRoute.ModeMaps) template = gameModes[index].templateName else mapListTab = index
+                        }
+                    },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
@@ -593,19 +611,42 @@ fun WikiHubScreen(
                 )
             }
 
-            is WikiRoute.GameModes -> {
+            WikiRoute.GameModes, WikiRoute.ExtractionMode -> {
                 GameModeScreen(
+                    focusedMode = if (route == WikiRoute.ExtractionMode) GameModeApi.EXTRACTION_MODE else null,
                     onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    onOpenMapDetail = { name, imageUrl ->
-                        navigateToMapDetail(name, imageUrl)
-                    }
+                    onOpenWikiUrl = ::openCurrentWiki,
+                    onOpenMapDetail = { name, imageUrl -> navigateToMapDetail(name, imageUrl) }
                 )
             }
 
+            WikiRoute.ExtractionHub -> ExtractionHubScreen(
+                onBack = { popBackStack() },
+                onNavigateTo = { if (isPageInteractive()) navigateTo(it) },
+                onOpenWikiUrl = ::openCurrentWiki,
+                backdrop = hubBackdrop
+            )
+
+            WikiRoute.ExtractionGuns, WikiRoute.ExtractionArmor -> ExtractionEquipmentScreen(
+                kind = if (route == WikiRoute.ExtractionGuns) EquipmentKind.GUNS else EquipmentKind.ARMOR,
+                onBack = { popBackStack() }, onOpenWikiUrl = ::openCurrentWiki, isActive = ::isPageInteractive
+            )
+            WikiRoute.ExtractionWorkshop -> ExtractionWorkshopScreen(
+                onBack = { popBackStack() }, onOpenWikiUrl = ::openCurrentWiki, isActive = ::isPageInteractive
+            )
+            WikiRoute.QuickEntryEditor -> key(editorVisit) {
+                val visit = editorVisit
+                QuickEntryEditorScreen(isActive = { visit == editorVisit && isPageInteractive() }, onBack = ::popBackStack)
+            }
+
+            WikiRoute.ExtractionSources -> ExtractionDropsScreen(
+                initialTask = DropTask.SOURCES, onBack = { popBackStack() }, onOpenWikiUrl = ::openCurrentWiki,
+                isActive = ::isPageInteractive
+            )
+
             is WikiRoute.ExtractionCatalog -> ExtractionCatalogScreen(
-                kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl,
-                isActive = { isCurrentPage() && !isOverlaid }
+                kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = ::openCurrentWiki,
+                isActive = ::isPageInteractive
             )
 
             is WikiRoute.Voting -> {

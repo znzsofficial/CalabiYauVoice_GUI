@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -112,146 +113,43 @@ private val PRESET_SWATCHES = listOf(
     0xFF795548.toInt() to "棕",
 )
 
-@Composable
-internal fun AppearanceSettingsSection() {
-    val globalThemeMode = LocalThemeMode.current
-    val globalSeedColor = LocalSeedColor.current
-    val globalLiquidGlass = LocalLiquidGlassEnabled.current
-    val globalHighReadability = LocalHighReadabilityDrawer.current
-    val globalPaletteStyle = LocalPaletteStyle.current
-    val globalContrastLevel = LocalContrastLevel.current
-    val globalAmoledDark = LocalAmoledDark.current
-    val globalColorSpec2025 = LocalColorSpec2025.current
+internal fun themeModeLabel(mode: Int): String = when (mode) {
+    AppPrefs.THEME_LIGHT -> "浅色"
+    AppPrefs.THEME_DARK -> "深色"
+    else -> "跟随系统"
+}
 
-    var themeMode by globalThemeMode
-    var seedColorInt by globalSeedColor
-    var liquidGlassEnabled by globalLiquidGlass
-    var highReadabilityDrawer by globalHighReadability
-    var paletteStyleIndex by globalPaletteStyle
-    var contrastLevel by globalContrastLevel
-    var amoledDark by globalAmoledDark
-    var colorSpec2025 by globalColorSpec2025
+@Composable
+internal fun AppearanceSettingsSection(wallpaperAutoRefresh: Boolean, onOpenColors: () -> Unit, onOpenWallpaper: () -> Unit) {
+    var themeMode by LocalThemeMode.current
+    var amoledDark by LocalAmoledDark.current
+    var liquidGlassEnabled by LocalLiquidGlassEnabled.current
+    var highReadabilityDrawer by LocalHighReadabilityDrawer.current
     var launcherIconTheme by remember { mutableIntStateOf(AppPrefs.launcherIconTheme) }
 
-    // ── 主题配色 ──
-    SettingsGroupHeader("主题配色")
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppSpacing.screen),
-        shape = AppShapes.card,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column {
-            // 主题模式
-            var showThemeDialog by remember { mutableStateOf(false) }
-            val themeName = when (themeMode) {
-                AppPrefs.THEME_LIGHT -> "浅色"
-                AppPrefs.THEME_DARK -> "深色"
-                else -> "跟随系统"
-            }
-            SettingsItem(
-                icon = Icons.Outlined.Palette,
-                title = "主题模式",
-                subtitle = themeName,
-                onClick = { showThemeDialog = true }
-            )
-
-            if (showThemeDialog) {
-                AlertDialog(
-                    onDismissRequest = { showThemeDialog = false },
-                    title = { Text("主题模式") },
-                    text = {
-                        Column {
-                            listOf(
-                                AppPrefs.THEME_SYSTEM to "跟随系统",
-                                AppPrefs.THEME_LIGHT to "浅色",
-                                AppPrefs.THEME_DARK to "深色"
-                            ).forEach { (mode, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(smoothCornerShape(12.dp))
-                                        .clickable {
-                                            themeMode = mode
-                                            AppPrefs.themeMode = mode
-                                            showThemeDialog = false
-                                        }
-                                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = themeMode == mode,
-                                        onClick = {
-                                            themeMode = mode
-                                            AppPrefs.themeMode = mode
-                                            showThemeDialog = false
-                                        }
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(label, style = MaterialTheme.typography.bodyLarge)
-                                }
-                            }
-                        }
-                    },
-                    shape = AppShapes.dialog,
-                    confirmButton = {}
-                )
-            }
-
-            // 主题色
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            ThemeColorPicker(
-                currentSeedColor = seedColorInt,
-                onColorSelected = { argb ->
-                    seedColorInt = argb
-                    AppPrefs.customSeedColor = argb
-                }
-            )
-
-            // 配色风格
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            PaletteStylePicker(
-                currentIndex = paletteStyleIndex,
-                onStyleSelected = { index ->
-                    paletteStyleIndex = index
-                    AppPrefs.paletteStyle = index
-                }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            ContrastLevelPicker(
-                currentIndex = contrastLevel,
-                onSelected = { index ->
-                    contrastLevel = index
-                    AppPrefs.contrastLevel = index
-                }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            SettingsToggleItem(
-                icon = Icons.Outlined.DarkMode,
-                title = "纯黑模式",
-                subtitle = "深色外观下使用纯黑背景",
-                checked = amoledDark,
-                onCheckedChange = {
-                    amoledDark = it
-                    AppPrefs.amoledDark = it
-                }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            SettingsToggleItem(
-                icon = Icons.Outlined.AutoAwesome,
-                title = "动态配色",
-                subtitle = if (colorSpec2025) "2025 规范" else "2021 规范",
-                checked = colorSpec2025,
-                onCheckedChange = {
-                    colorSpec2025 = it
-                    AppPrefs.colorSpec2025 = it
-                }
+    SettingsGroupHeader("主题")
+    SettingsCard {
+        var showThemeDialog by remember { mutableStateOf(false) }
+        SettingsItem(Icons.Outlined.Palette, "主题模式", themeModeLabel(themeMode)) { showThemeDialog = true }
+        if (showThemeDialog) {
+            SettingsSingleChoiceDialog(
+                title = "主题模式", options = listOf(AppPrefs.THEME_SYSTEM, AppPrefs.THEME_LIGHT, AppPrefs.THEME_DARK)
+                    .map { it to themeModeLabel(it) },
+                selectedValue = themeMode,
+                onSelect = { themeMode = it; AppPrefs.themeMode = it; showThemeDialog = false },
+                onDismissRequest = { showThemeDialog = false }
             )
         }
+        SettingsDivider()
+        SettingsToggleItem(Icons.Outlined.DarkMode, "纯黑模式", "深色外观下使用纯黑背景", amoledDark) {
+            amoledDark = it
+            AppPrefs.amoledDark = it
+        }
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.ColorLens, SettingsPage.COLORS.title, themeColorName(LocalSeedColor.current.intValue), onOpenColors)
+        SettingsDivider()
+        SettingsItem(Icons.Outlined.Wallpaper, SettingsPage.WALLPAPER.title,
+            if (wallpaperAutoRefresh) "启动时随机更换" else "自动更换已关闭", onOpenWallpaper)
     }
 
     // ── 视觉效果 ──
@@ -353,22 +251,32 @@ internal fun AppearanceSettingsSection() {
             )
         }
     }
+}
 
-    // ── 壁纸 ──
-    Spacer(Modifier.height(AppSpacing.itemGap))
-    SettingsGroupHeader("壁纸")
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppSpacing.screen),
-        shape = AppShapes.card,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        WallpaperItems()
+@Composable
+internal fun ColorSettingsSection() {
+    var seedColor by LocalSeedColor.current
+    var paletteStyle by LocalPaletteStyle.current
+    var contrast by LocalContrastLevel.current
+    var colorSpec2025 by LocalColorSpec2025.current
+    SettingsCard {
+        ThemeColorPicker(seedColor) { seedColor = it; AppPrefs.customSeedColor = it }
+        SettingsDivider()
+        PaletteStylePicker(paletteStyle) { paletteStyle = it; AppPrefs.paletteStyle = it }
+        SettingsDivider()
+        ContrastLevelPicker(contrast) { contrast = it; AppPrefs.contrastLevel = it }
+        SettingsDivider()
+        SettingsToggleItem(Icons.Outlined.AutoAwesome, "动态配色", if (colorSpec2025) "2025 规范" else "2021 规范", colorSpec2025) {
+            colorSpec2025 = it
+            AppPrefs.colorSpec2025 = it
+        }
     }
 }
 
 // ─────────────────────── 主题色选择器 ───────────────────────
+
+private fun themeColorName(color: Int): String = THEME_COLOR_SOURCES.firstOrNull { it.value == color }?.label
+    ?: PRESET_SWATCHES.firstOrNull { it.first == color }?.second ?: "自定义"
 
 @Composable
 private fun ThemeColorPicker(
@@ -377,14 +285,11 @@ private fun ThemeColorPicker(
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val wallpaperSeedArgb = LocalWallpaperSeedColor.current.intValue
-    val currentName = THEME_COLOR_SOURCES.firstOrNull { it.value == currentSeedColor }?.label
-        ?: PRESET_SWATCHES.firstOrNull { it.first == currentSeedColor }?.second
-        ?: if (currentSeedColor == 0) "系统" else "自定义"
 
     SettingsItem(
         icon = Icons.Outlined.ColorLens,
         title = "主题色",
-        subtitle = currentName,
+        subtitle = themeColorName(currentSeedColor),
         onClick = { showDialog = true }
     )
 
@@ -689,26 +594,26 @@ private fun ColorChannelSlider(
 // ─────────────────────── 壁纸管理 ───────────────────────
 
 @Composable
-private fun WallpaperItems() {
+internal fun WallpaperSettingsSection(wallpaperAutoRefresh: Boolean, onAutoRefreshChange: (Boolean) -> Unit) {
+    SettingsCard { WallpaperItems(wallpaperAutoRefresh, onAutoRefreshChange) }
+}
+
+@Composable
+private fun WallpaperItems(wallpaperAutoRefresh: Boolean, onAutoRefreshChange: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var wallpaperMessage by remember { mutableStateOf<String?>(null) }
-    var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
 
-    Column {
-        SettingsToggleItem(
+    SettingsToggleItem(
         icon = Icons.Outlined.Autorenew,
         title = "自动更换",
         subtitle = "启动时随机更换壁纸",
         checked = wallpaperAutoRefresh,
-        onCheckedChange = {
-            wallpaperAutoRefresh = it
-            AppPrefs.wallpaperAutoRefresh = it
-        }
+        onCheckedChange = onAutoRefreshChange
     )
 
-    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+    SettingsDivider()
     SettingsItem(
         icon = Icons.Outlined.Refresh,
         title = "立即更换",
@@ -730,7 +635,7 @@ private fun WallpaperItems() {
         }
     )
 
-    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+    SettingsDivider()
     SettingsItem(
         icon = Icons.Outlined.SaveAlt,
         title = "存储到“下载”",
@@ -764,7 +669,6 @@ private fun WallpaperItems() {
             }
         }
     )
-    }
 }
 
 // ─────────────────────── 配色风格选择器 ───────────────────────

@@ -2,7 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.gamesettings
 
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.cache.fetchValidatedCachePayload
+import com.nekolaska.calabiyau.core.network.NetworkMonitor.Route
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.api.PcGameSettingsApi
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsBlock
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.parser.PcGameSettingsParser
@@ -13,6 +13,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Headers
+import util.HttpTextResponse
 import org.jsoup.Jsoup
 import org.junit.Assume.assumeTrue
 import java.io.File
@@ -35,30 +37,35 @@ class PcGameSettingsFullPageAuditTest {
         assertEquals(31, parsed.page.settings.count { it.isQuickReference })
         assertEquals(4, parsed.page.sections.flatMap { it.blocks }.filterIsInstance<PcSettingsBlock.Reference>().size)
         var disk: String? = null
-        val loaded = PcGameSettingsApi.loadSource {
-            PcGameSettingsRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { response }, { null }, { disk = it }, validate)
-            }
+        suspend fun load(route: () -> Route, pause: suspend (Long) -> Unit, get: () -> HttpTextResponse) = PcGameSettingsApi.loadSource {
+            PcGameSettingsRemoteSource.toSource(PcGameSettingsRemoteSource.loadPayload(false, route,
+                { disk?.let { OfflineCache.CacheResult(it, true, 456L) } }, { disk = it }, pause, get))
         }
-        assertIs<ApiResult.Success<*>>(loaded)
-        assertFalse(loaded.isOffline)
-        assertEquals(response, disk)
+        for (initial in listOf(Route.NONE, Route.VALIDATED)) {
+            disk = null
+            var route = initial
+            var attempts = 0
+            var waits = 0
+            val loaded = load({ route }, { waits++; route = Route.UNVALIDATED }) {
+                assertTrue(route != Route.NONE)
+                attempts++
+                if (initial == Route.VALIDATED && attempts == 1) HttpTextResponse(502, "", Headers.headersOf())
+                else HttpTextResponse(200, response, Headers.headersOf())
+            }
+            assertFalse(assertIs<ApiResult.Success<*>>(loaded).isOffline)
+            assertEquals(1, waits)
+            assertEquals(if (initial == Route.NONE) 1 else 2, attempts)
+            assertEquals(response, disk)
+        }
         val broken = payload(Jsoup.parse(html).apply { select("table.klbqtable").last()!!.remove() }.html())
-        val offline = PcGameSettingsApi.loadSource {
-            PcGameSettingsRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { broken }, { OfflineCache.CacheResult(disk!!, true, 456L) },
-                    { disk = it }, validate)
-            }
-        }
+        val offline = load({ Route.VALIDATED }, { error("Must use fallback") }) { HttpTextResponse(200, broken, Headers.headersOf()) }
         assertIs<ApiResult.Success<*>>(offline)
         assertTrue(offline.isOffline)
         assertEquals(456L, offline.cacheAgeMs)
         assertEquals(response, disk)
-        val noCache = PcGameSettingsApi.loadSource {
-            PcGameSettingsRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { broken }, { null }, { error("Bad page published") }, validate)
-            }
-        }
+        assertTrue(assertIs<ApiResult.Success<*>>(load({ Route.NONE }, { error("Good cache available") }) { error("No route") }).isOffline)
+        disk = null
+        val noCache = load({ Route.VALIDATED }, { error("Do not retry structural failures") }) { HttpTextResponse(200, broken, Headers.headersOf()) }
         assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(noCache).kind)
     }
 

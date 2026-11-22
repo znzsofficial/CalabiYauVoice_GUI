@@ -3,7 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.extraction.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-internal enum class DropTask(val title: String) { ITEMS("找物品"), SOURCES("查来源") }
+internal enum class DropTask(val title: String) { ITEMS("按物品"), SOURCES("按来源") }
 
 @Serializable
 internal data class DropLocation(
@@ -26,6 +26,7 @@ internal data class DropLocation(
 /** Each exploratory hop keeps its exact origin, rather than reconstructing it from the active tab. */
 @Serializable
 internal data class DropNavigation(val history: List<DropLocation> = listOf(DropLocation())) {
+    constructor(task: DropTask) : this(listOf(DropLocation(task = task)))
     val current: DropLocation get() = history.last()
     val canGoBack: Boolean get() = history.size > 1
     // A detail overlays its originating list. Re-entering the same item through another pool is
@@ -33,7 +34,7 @@ internal data class DropNavigation(val history: List<DropLocation> = listOf(Drop
     val contentStatePath: List<DropLocation>
         get() = history.take((history.indexOfLast { !it.hasDetail } + 1).coerceAtLeast(1))
     fun back(): DropNavigation = if (canGoBack) copy(history = history.dropLast(1)) else this
-    fun selectTask(task: DropTask): DropNavigation = DropNavigation(listOf(DropLocation(task = task)))
+    fun selectTask(task: DropTask): DropNavigation = DropNavigation(task)
     private fun push(location: DropLocation): DropNavigation =
         if (current == location) this else copy(history = history + location)
 
@@ -61,9 +62,12 @@ internal data class DropSourceRecord(
     val sourceNotes: ExtractionEntry? = null
 ) {
     /** A search hit in the linked notes opens those notes, never an unexplained container result. */
-    fun matchingRecord(query: String): DropSourceRecord? = when {
+    fun matchingRecord(query: String, catalog: List<ExtractionEntry> = emptyList()): DropSourceRecord? = when {
         entry.matches(query) -> this
         sourceNotes?.matches(query) == true -> DropSourceRecord(sourceNotes, false)
+        linkedDropSharedPool(entry, catalog)?.dropPoolGroups?.any { group ->
+            group.label.contains(query.trim(), true) || group.items.any { it.contains(query.trim(), true) }
+        } == true -> this
         else -> null
     }
 }

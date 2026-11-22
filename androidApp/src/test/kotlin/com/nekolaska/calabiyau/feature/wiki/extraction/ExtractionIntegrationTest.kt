@@ -11,8 +11,11 @@ import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.decodeRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.encode
-import com.nekolaska.calabiyau.feature.wiki.hub.catalogHubExtractionEntries
+import com.nekolaska.calabiyau.feature.wiki.hub.extractionEquipmentLinks
+import com.nekolaska.calabiyau.feature.wiki.hub.extractionGuideLinks
+import com.nekolaska.calabiyau.feature.wiki.hub.matchingHubEntries
 import com.nekolaska.calabiyau.feature.wiki.hub.nativeWikiRoute
+import com.nekolaska.calabiyau.feature.wiki.hub.toWikiRoute
 import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CancellationException
@@ -22,6 +25,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assume.assumeTrue
 import java.io.File
+import java.net.URI
 import kotlin.test.*
 
 class ExtractionIntegrationTest {
@@ -40,11 +44,13 @@ class ExtractionIntegrationTest {
     @Test fun modeOverviewReadsActualTeachingCaptionsWithoutCatalogNavigation() {
         val entry = GameModeApi.MODES.single { it.pageName == EXTRACTION_MODE_PAGE }
         val detail = GameModeParsers.parseModeWikitext(entry, fixture("overview.wikitext"), emptyList())
+        assertEquals(WikiRoute.ExtractionMode, nativeWikiRoute(detail.wikiUrl))
         assertEquals(4, detail.summary.lines().size)
         assertTrue(detail.summary.contains("撤离点完成撤离"))
         assertTrue(detail.settings.contains("实体子弹"))
         assertTrue(detail.settings.contains("完美闪避"))
         assertFalse(detail.settings.contains(";枪械"))
+        assertFalse(detail.settings.contains("图鉴"))
         assertEquals(listOf("维里昂裂隙"), detail.maps)
         assertEquals("", detail.winCondition) // No invented win-condition prose.
         assertFalse(detail.summary.contains("{{") || detail.summary.contains("<big>"))
@@ -70,8 +76,8 @@ class ExtractionIntegrationTest {
         assertEquals("$EXTRACTION_MODE_PAGE/物资图鉴", loot.pageName)
         assertEquals(route, nativeWikiRoute("/klbq/${loot.pageName}"))
         assertEquals(route, nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/物品图鉴"))
-        assertNull(nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/枪械图鉴"))
-        assertNull(nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/防具图鉴"))
+        assertEquals(WikiRoute.ExtractionGuns, nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/枪械图鉴"))
+        assertEquals(WikiRoute.ExtractionArmor, nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/防具图鉴"))
         for (other in listOf("loot", "guns", "armor")) assertFalse(captured(other).canCache, other)
         assertTrue(ExtractionCatalogParsers.parseResult(fixture("loot.html"), loot).canCache) // old offline cards
         val supplies = captured("supplies"); assertTrue(supplies.canCache)
@@ -90,22 +96,55 @@ class ExtractionIntegrationTest {
         }
     }
 
-    @Test fun allThreeCatalogEntriesBelongToTheAppearanceAndCatalogHub() {
-        assertEquals(ExtractionCatalogKind.entries, catalogHubExtractionEntries.map { it.kind })
-        assertEquals(3, catalogHubExtractionEntries.map { it.route }.distinct().size)
-        catalogHubExtractionEntries.forEach {
-            assertEquals(WikiRoute.ExtractionCatalog(it.kind), it.route)
-            assertTrue(it.subtitle.isNotBlank())
+    @Test fun topicSearchLeadsToTheHubButSpecificQueriesStillOpenTheirDestinations() {
+        val loot = WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT)
+        val attachments = WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS)
+        val drops = WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
+        for ((query, expected) in listOf(
+            "搜打撤" to WikiRoute.ExtractionHub, "弦溯战线" to WikiRoute.ExtractionHub, "弦溯战线专题" to WikiRoute.ExtractionHub,
+            "搜打撤图鉴" to loot, "弦溯战线物品图鉴" to loot, "物资图鉴" to loot,
+            "搜打撤枪械" to WikiRoute.ExtractionGuns, "防具图鉴" to WikiRoute.ExtractionArmor,
+            "搜打撤工坊" to WikiRoute.ExtractionWorkshop,
+            "弦溯战线配件图鉴" to attachments, "掉落图鉴" to drops, "找物品" to drops, "查来源" to WikiRoute.ExtractionSources,
+            "掉落查询" to drops, "按物品" to drops, "按来源" to WikiRoute.ExtractionSources
+        )) assertEquals(expected, matchingHubEntries(query).firstOrNull()?.targetRoute, query)
+    }
+
+    @Test fun topicDirectoryOpensNativeArticlesWithTheRawDropTableStillOnTheWeb() {
+        val links = extractionEquipmentLinks + extractionGuideLinks
+        assertEquals(listOf("掉落表格"), links.filter { it.route == null }.map { it.label })
+        assertEquals(setOf(WikiRoute.ExtractionGuns, WikiRoute.ExtractionArmor, WikiRoute.ExtractionWorkshop,
+            WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT), WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS),
+            WikiRoute.ExtractionMode), links.mapNotNull { it.route }.toSet())
+        for (link in links) {
+            val uri = URI(link.originalUrl)
+            assertEquals("https", uri.scheme)
+            assertEquals("wiki.biligame.com", uri.rawAuthority)
+            assertEquals("/klbq/${link.article}", uri.path)
+            assertFalse(uri.rawPath.contains("%2F", ignoreCase = true))
+            assertNull(uri.rawQuery)
+            assertNull(uri.rawFragment)
+            assertEquals(link.route, nativeWikiRoute(link.originalUrl))
+            assertNull(nativeWikiRoute("${link.originalUrl}?action=edit"))
+            link.route?.let { assertEquals(it, decodeRoute(it.encode())) }
         }
-        assertFalse(GameModeParsers.parseModeWikitext(ModeEntry("弦溯战线", EXTRACTION_MODE_PAGE),
-            fixture("overview.wikitext"), emptyList()).settings.contains("图鉴"))
     }
 
     @Test fun catalogRouteRoundTripsWithoutAffectingOldSavedRoutes() {
         for (kind in ExtractionCatalogKind.entries) {
             val route = WikiRoute.ExtractionCatalog(kind)
+            assertEquals(route, decodeRoute("extractionCatalog|${kind.name}"))
             assertEquals(route, decodeRoute(route.encode()))
         }
+        val sources = DropTask.SOURCES.toWikiRoute()
+        assertEquals(WikiRoute.ExtractionSources, sources)
+        assertEquals(decodeRoute("extractionCatalog|DROPS"), DropTask.ITEMS.toWikiRoute())
+        val stack = listOf(WikiRoute.Home, WikiRoute.ExtractionHub, sources)
+        assertEquals(stack, stack.map { decodeRoute(it.encode()) })
+        assertEquals(WikiRoute.ExtractionMode, decodeRoute(WikiRoute.ExtractionMode.encode()))
+        assertEquals(WikiRoute.QuickEntryEditor, decodeRoute(WikiRoute.QuickEntryEditor.encode()))
+        assertEquals(WikiRoute.ExtractionMode, nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE"))
+        assertNull(nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE#模式设定"))
         assertNull(decodeRoute("extractionCatalog|UNKNOWN"))
         assertEquals(WikiRoute.GameModes, decodeRoute("gameModes"))
         assertEquals(WikiRoute.Items, decodeRoute("items"))

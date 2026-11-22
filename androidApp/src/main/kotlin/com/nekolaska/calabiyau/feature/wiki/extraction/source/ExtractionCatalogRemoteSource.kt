@@ -24,7 +24,7 @@ object ExtractionCatalogRemoteSource {
     private var nextRequestAt = 0L
 
     // Serialize this feature's secondary requests and respect EdgeOne's cooling interval on failures too.
-    private suspend fun get(url: String): String? = requestMutex.withLock {
+    internal suspend fun get(url: String): String? = requestMutex.withLock {
         delay((nextRequestAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
         try { WikiEngine.safeGet(url) }
         finally { nextRequestAt = SystemClock.elapsedRealtime() + 6_500L }
