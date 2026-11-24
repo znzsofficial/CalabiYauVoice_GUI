@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.parser
 
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
@@ -12,6 +13,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 object BioCardParsers {
+    private val cardIdsParam = Regex("""(?:var|let|const)\s+cardIdsParam\s*=\s*(["'])(.*?)\1""")
+    private val factionParam = Regex("""(?:var|let|const)\s+factionParam\s*=\s*(["'])(.*?)\1""")
 
     fun parsePcCards(
         html: String,
@@ -26,7 +29,7 @@ object BioCardParsers {
                 .ifBlank { "未知卡牌" }
 
             val roles = HtmlText.clean(item.selectFirst(".zombie-card__roles")?.html().orEmpty())
-                .split(Regex("[、,/\\n]+"))
+                .split('、', ',', '/', '\n')
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it != "无" }
 
@@ -111,7 +114,7 @@ object BioCardParsers {
         val decks = mutableListOf<SharedDeck>()
 
         rootChildren.forEach { element ->
-            if (element.tagName().matches(Regex("h[1-6]"))) {
+            if (element.htmlHeadingLevel() != null) {
                 val title = element.selectFirst("span.mw-headline")?.text()?.trim().orEmpty()
                 if (title == "超弦体卡组" || title == "晶源体卡组") {
                     currentFaction = title
@@ -181,9 +184,9 @@ object BioCardParsers {
         // regexing the full HTML so nested quotes/markup can't break the match.
         for (script in Jsoup.parse(html).select("script")) {
             val scriptData = script.data()
-            val ids = scriptParameter(scriptData, "cardIdsParam") ?: continue
+            val ids = cardIdsParam.find(scriptData)?.groupValues?.get(2) ?: continue
             if (ids.isBlank()) continue
-            val faction = scriptParameter(scriptData, "factionParam")?.trim()
+            val faction = factionParam.find(scriptData)?.groupValues?.get(2)?.trim()
                 ?.takeIf { it.isNotBlank() } ?: fallbackFaction
             val cardIndexMap = cardIndexMapByFaction[faction].orEmpty()
             val cardIndexes = mutableListOf<Int>()
@@ -200,7 +203,4 @@ object BioCardParsers {
         return ""
     }
 
-    private fun scriptParameter(script: String, name: String): String? =
-        Regex("""(?:var|let|const)\s+$name\s*=\s*(["'])(.*?)\1""")
-            .find(script)?.groupValues?.getOrNull(2)
 }

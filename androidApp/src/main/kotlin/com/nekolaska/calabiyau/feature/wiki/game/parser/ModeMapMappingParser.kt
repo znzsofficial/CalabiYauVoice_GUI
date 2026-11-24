@@ -2,18 +2,23 @@ package com.nekolaska.calabiyau.feature.wiki.game.parser
 
 /** Read group/list pairs within the same template, including multiline and nested navboxes. */
 internal object ModeMapMappingParser {
-    private val link = Regex("""\[\[([^]|#]+)(?:#[^]|]*)?(?:\|[^]]*)?]]""")
+    private val link = Regex("""\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]""")
+    // Consume the first opening marker and its entire region; markers inside it are literal.
+    private val ignoredMarkup = Regex(
+        """<!--.*?(?:-->|\z)|<nowiki(?:\s+[^>]*?)?(?:/>|>.*?</nowiki\s*>)""",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    )
+    private val navboxParameter = Regex("""(?:group|list)\d+""")
 
     fun parse(raw: String): Map<String, List<String>> {
-        val text = raw.replace(Regex("<!--[\\s\\S]*?-->"), "")
-            .replace(Regex("<nowiki[\\s\\S]*?</nowiki>", RegexOption.IGNORE_CASE), "")
+        val text = raw.replace(ignoredMarkup, "")
         val frames = mutableListOf<String>()
         val starts = ArrayDeque<Int>()
         var i = 0
         while (i < text.length - 1) {
-            when (text.substring(i, i + 2)) {
-                "{{" -> { starts.addLast(i + 2); i += 2 }
-                "}}" -> {
+            when {
+                text.startsWith("{{", i) -> { starts.addLast(i + 2); i += 2 }
+                text.startsWith("}}", i) -> {
                     if (starts.isNotEmpty()) frames += text.substring(starts.removeLast(), i)
                     i += 2
                 }
@@ -26,7 +31,7 @@ internal object ModeMapMappingParser {
         frames.forEach { frame ->
             val params = splitParameters(frame).mapNotNull { part ->
                 val key = part.substringBefore('=').trim()
-                if (Regex("(?:group|list)\\d+").matches(key) && '=' in part) key to part.substringAfter('=') else null
+                if (navboxParameter.matches(key) && '=' in part) key to part.substringAfter('=') else null
             }.groupBy({ it.first }, { it.second })
             params.filterKeys { it.startsWith("group") }.forEach { (key, groups) ->
                 val group = groups.singleOrNull() ?: return@forEach
@@ -50,12 +55,11 @@ internal object ModeMapMappingParser {
         var linkDepth = 0
         var i = 0
         while (i < text.length) {
-            val pair = text.substring(i, (i + 2).coerceAtMost(text.length))
-            when (pair) {
-                "{{" -> { templateDepth++; i += 2 }
-                "}}" -> { templateDepth--; i += 2 }
-                "[[" -> { linkDepth++; i += 2 }
-                "]]" -> { linkDepth--; i += 2 }
+            when {
+                text.startsWith("{{", i) -> { templateDepth++; i += 2 }
+                text.startsWith("}}", i) -> { templateDepth--; i += 2 }
+                text.startsWith("[[", i) -> { linkDepth++; i += 2 }
+                text.startsWith("]]", i) -> { linkDepth--; i += 2 }
                 else -> {
                     if (text[i] == '|' && templateDepth == 0 && linkDepth == 0) {
                         parts += text.substring(start, i)

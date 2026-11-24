@@ -151,6 +151,7 @@ internal fun ExtractionItemDetailSheet(entry: ExtractionEntry, kind: ExtractionC
 
 private val itemMetricLabels = setOf("价值", "占格", "重量", "售价", "搜刮耗时", "叠加上限")
 private val itemEffectLabels = setOf("实际效果", "适用", "使用效果")
+private val imageQualityPrefix = Regex("""^Q(\d+)\b""")
 
 @Composable
 private fun ItemMetrics(fields: List<ExtractionField>) {
@@ -490,7 +491,7 @@ internal fun ExtractionDetailSheet(
                 ExtractionDetailItemRow(
                     name = image.name,
                     qualityLabel = image.qualityLabel.orEmpty(),
-                    qualityCode = image.qualityLabel?.let { Regex("^Q(\\d+)\\b").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: -1,
+                    qualityCode = image.qualityLabel?.let { imageQualityPrefix.find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: -1,
                     imageUrl = image.imageUrl,
                     onClick = null
                 )

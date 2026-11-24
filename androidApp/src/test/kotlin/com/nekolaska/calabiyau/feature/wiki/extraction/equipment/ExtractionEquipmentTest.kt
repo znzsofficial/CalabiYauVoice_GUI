@@ -68,6 +68,28 @@ class ExtractionEquipmentTest {
         assertTrue(result.rows("", null, 1, EquipmentSort.ARMOR).isEmpty())
     }
 
+    @Test fun roundedWikiMoneyRefreshesOldCacheAndKeepsExactValue() = runBlocking {
+        for (kind in EquipmentKind.entries) {
+            val old = page(kind)
+            val cached = OfflineCache.CacheResult(envelope(kind, old), true, 1234)
+            for ((raw, caption) in listOf(19844L to "2万", 33600L to "3.4万", 5330812L to "533万", 199990000L to "2亿")) {
+                val fresh = envelope(kind, old.replace("data-sort-value=\"1000\"", "data-sort-value=\"$raw\"").replace("价值 1,000", "价值 $caption"))
+                for (previous in listOf(null, cached)) {
+                    var stored: String? = null
+                    val result = EquipmentRemoteSource.validatedFetch(true, false, { EquipmentRemoteSource.decode(kind, it) },
+                        network = { fresh }, read = { previous }, publish = { stored = it })
+                    assertEquals(fresh, stored)
+                    val model = EquipmentRemoteSource.decode(kind, assertNotNull(result).payload)
+                    val row = model.rows(raw.toString(), null, 8, EquipmentSort.VALUE).single().variant
+                    assertEquals(raw, row.numericValue); assertEquals(caption, row.value)
+                }
+            }
+            val bad = envelope(kind, old.replace("data-sort-value=\"1000\"", "data-sort-value=\"19844\"").replace("价值 1,000", "价值 2.1万"))
+            assertEquals(cached, EquipmentRemoteSource.validatedFetch(true, false, { EquipmentRemoteSource.decode(kind, it) },
+                network = { bad }, read = { cached }, publish = { fail("Published a contradictory price") }))
+        }
+    }
+
     @Test fun missingMixedAndTruncatedPagesNeverReplaceEitherValidatedCache() = runBlocking {
         assertNotEquals(EquipmentKind.GUNS.cacheKey, EquipmentKind.ARMOR.cacheKey)
         for (kind in EquipmentKind.entries) {

@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.oath.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.feature.wiki.oath.model.OathBirthdayGift
 import com.nekolaska.calabiyau.feature.wiki.oath.model.OathBondItem
@@ -123,7 +124,7 @@ object OathParsers {
 
     private fun Element.cleanText(): String {
         select("style,script,.mw-editsection").remove()
-        return text().replace(Regex("\\s+"), " ").trim()
+        return text().collapseWikiWhitespace().trim()
     }
 
     private fun Element.firstImageUrl(): String? {

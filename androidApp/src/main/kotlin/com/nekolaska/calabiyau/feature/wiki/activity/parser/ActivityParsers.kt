@@ -1,21 +1,27 @@
 package com.nekolaska.calabiyau.feature.wiki.activity.parser
 
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.feature.wiki.activity.model.ACTIVITY_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.activity.model.ActivityEntry
-import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.net.URI
 import java.net.URLDecoder
 
-data class ParsedActivity(
-    val entry: ActivityEntry,
-    val detailPageTitle: String?
-)
+data class ParsedActivity(val entry: ActivityEntry) {
+    val detailPageTitle: String? get() = entry.detailPageTitle
+}
 
 object ActivityParsers {
 
-    private const val SITE_BASE = "https://wiki.biligame.com"
-    private const val PAGE_BASE = "$SITE_BASE/klbq/"
+    private val pageBase = URI("https://wiki.biligame.com/klbq/")
+    private val startHeaders = setOf("开始", "开始时间", "活动开始时间")
+    private val endHeaders = setOf("结束", "结束时间", "活动结束时间")
+    private val nonArticleNamespaces = setOf(
+        "文件", "file", "图像", "image", "媒体", "media", "特殊", "special", "分类", "category", "模板", "template"
+    )
 
     fun parseActivities(html: String): List<ParsedActivity> {
         val document = Jsoup.parse(html)
@@ -30,9 +36,9 @@ object ActivityParsers {
         return parseLegacyActivityTable(document, html)
     }
 
-    private fun parseEventCard(card: org.jsoup.nodes.Element): ParsedActivity? {
-        val titleLink = card.selectFirst("[class*=title] a[title], [class*=title] a[href]")
-        val title = card.selectFirst("[class*=title]")?.text()?.trim().orEmpty()
+    private fun parseEventCard(card: Element): ParsedActivity? {
+        val titleBox = card.selectFirst("[class*=title]") ?: return null
+        val title = titleBox.text().trim()
         if (title.isBlank()) return null
 
         var startTime = ""
@@ -46,12 +52,7 @@ object ActivityParsers {
             }
         }
 
-        val detailLink = titleLink ?: card.selectFirst("a[title], a[href]")
-        val detailPageTitle = detailLink?.attr("title")?.takeIf { it.isNotBlank() }
-            ?: detailLink?.attr("href")?.let(::extractPageTitleFromHref)
-        val wikiUrl = detailLink?.attr("href")
-            ?.let(::toAbsoluteWikiUrl)
-            ?: ACTIVITY_PAGE_URL
+        val destination = activityDestination(titleBox.select("a[href]") + card.select("[class*=imagebox] a[href]"))
 
         return ParsedActivity(
             entry = ActivityEntry(
@@ -60,18 +61,20 @@ object ActivityParsers {
                 endTime = endTime,
                 description = card.selectFirst("[class*=desc]")?.text()?.trim().orEmpty(),
                 imageUrl = card.selectFirst("[class*=imagebox] img")?.attr("src"),
-                wikiUrl = wikiUrl
-            ),
-            detailPageTitle = detailPageTitle
+                wikiUrl = destination.url,
+                detailPageTitle = destination.pageTitle
+            )
         )
     }
 
-    private fun parseLegacyActivityTable(document: org.jsoup.nodes.Document, html: String): List<ParsedActivity> {
+    private fun parseLegacyActivityTable(document: Document, html: String): List<ParsedActivity> {
         val rows = document.select("table.klbqtable tr")
 
         val parsed = rows.mapNotNull { row ->
             val cells = row.select("> th, > td")
-            if (cells.size < 4) return@mapNotNull null
+            if (cells.size < 4 || row.parent()?.normalName() == "thead" || cells.all { it.normalName() == "th" }) {
+                return@mapNotNull null
+            }
 
             val titleCell = cells[0]
             val titleCellText = HtmlText.clean(titleCell.html())
@@ -83,20 +86,9 @@ object ActivityParsers {
             val endTime = HtmlText.clean(cells[2].html())
             val description = HtmlText.clean(cells[3].html())
 
-            val detailLink = titleCell.selectFirst("a[title], a[href]")
-            val detailPageTitle = detailLink?.attr("title")?.takeIf { it.isNotBlank() }
-                ?: detailLink?.attr("href")?.let(::extractPageTitleFromHref)
-            val wikiUrl = detailLink?.attr("href")
-                ?.let(::toAbsoluteWikiUrl)
-                ?: ACTIVITY_PAGE_URL
-
-            val isHeaderRow = title in setOf("活动", "活动名称", "名称") ||
-                startTime.contains("开始", ignoreCase = true) ||
-                endTime.contains("结束", ignoreCase = true) ||
-                description.contains("简介", ignoreCase = true) ||
-                description.contains("说明", ignoreCase = true)
-
-            if (title.isBlank() || isHeaderRow) return@mapNotNull null
+            val hasColumnLabels = startTime.trimEnd(':', '：') in startHeaders && endTime.trimEnd(':', '：') in endHeaders
+            if (title.isBlank() || hasColumnLabels) return@mapNotNull null
+            val destination = activityDestination(titleCell.select("a[href]"))
 
             ParsedActivity(
                 entry = ActivityEntry(
@@ -105,9 +97,9 @@ object ActivityParsers {
                     endTime = endTime,
                     description = description,
                     imageUrl = titleCell.selectFirst("img")?.attr("src"),
-                    wikiUrl = wikiUrl
-                ),
-                detailPageTitle = detailPageTitle
+                    wikiUrl = destination.url,
+                    detailPageTitle = destination.pageTitle
+                )
             )
         }
 
@@ -117,29 +109,51 @@ object ActivityParsers {
     fun extractFirstFileTitle(detailHtml: String): String? {
         val document = Jsoup.parse(detailHtml)
         return document.select("a[href]").firstNotNullOfOrNull { link ->
-            val pageTitle = extractPageTitleFromHref(link.attr("href")) ?: return@firstNotNullOfOrNull null
-            if (pageTitle.startsWith("文件:") || pageTitle.startsWith("File:")) pageTitle else null
+            webUri(link)?.let(::wikiPageTitle)?.takeIf { it.startsWith("文件:") || it.startsWith("File:", ignoreCase = true) }
         }
     }
 
-    private fun extractPageTitleFromHref(href: String): String? {
-        val encodedPart = when {
-            "/klbq/" in href -> href.substringAfter("/klbq/")
-            href.startsWith("/") -> href.removePrefix("/")
-            else -> href
+    private data class Destination(val url: String, val pageTitle: String? = null)
+
+    /** Cover images may link to either a File page or the article. A caption/tooltip is not a page identity. */
+    private fun activityDestination(links: List<Element>): Destination {
+        var coverArticle: Destination? = null
+        var external: Destination? = null
+        for (link in links) {
+            if (link.hasClass("new")) continue
+            val uri = webUri(link) ?: continue
+            if (!uri.host.equals(pageBase.host, ignoreCase = true)) {
+                if (external == null && link.hasText()) external = Destination(uri.toString())
+                continue
+            }
+            val title = wikiPageTitle(uri) ?: continue
+            if (title == "活动" || title.substringBefore(':', "").lowercase() in nonArticleNamespaces) continue
+            // A link to a particular section belongs on the original page; opening the native
+            // article at the top silently loses the selected reward track.
+            val article = Destination(uri.toString(), title.takeIf { uri.rawFragment.isNullOrEmpty() })
+            if (link.hasText()) return article
+            if (coverArticle == null) coverArticle = article
         }
-            .substringBefore('#')
-            .substringBefore('?')
-            .takeIf { it.isNotBlank() }
-            ?: return null
-
-        return runCatching { URLDecoder.decode(encodedPart, "UTF-8") }.getOrNull()
+        return external ?: coverArticle ?: Destination(ACTIVITY_PAGE_URL)
     }
 
-    private fun toAbsoluteWikiUrl(href: String): String = when {
-        href.startsWith("http://") || href.startsWith("https://") -> href
-        href.startsWith("/") -> "$SITE_BASE$href"
-        else -> "$PAGE_BASE${href.trimStart('/')}"
+    private fun webUri(link: Element): URI? = runCatching { pageBase.resolve(link.attr("href").trim()) }.getOrNull()?.takeIf {
+        !it.host.isNullOrEmpty() && it.userInfo == null && (it.scheme.equals("https", true) || it.scheme.equals("http", true))
     }
 
+    private fun wikiPageTitle(uri: URI): String? {
+        val defaultPort = if (uri.scheme.equals("https", ignoreCase = true)) 443 else 80
+        if (!uri.host.equals(pageBase.host, ignoreCase = true) || (uri.port != -1 && uri.port != defaultPort)) return null
+        val path = uri.path
+        if (!path.startsWith("/klbq/")) return null
+        val query = uri.rawQuery?.split('&').orEmpty().filterNot { it == "action=view" }
+        val title = if (path == "/klbq/index.php") {
+            val param = query.singleOrNull()?.takeIf { it.startsWith("title=") } ?: return null
+            URLDecoder.decode(param.removePrefix("title="), "UTF-8")
+        } else {
+            if (query.isNotEmpty()) return null
+            path.removePrefix("/klbq/")
+        }
+        return title.replace('_', ' ').trim().takeIf { it.isNotEmpty() && !it.endsWith(".php", ignoreCase = true) }
+    }
 }

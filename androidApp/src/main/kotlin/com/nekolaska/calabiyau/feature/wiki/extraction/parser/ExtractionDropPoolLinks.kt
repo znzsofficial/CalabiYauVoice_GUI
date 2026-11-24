@@ -35,7 +35,7 @@ internal fun linkDropSharedPools(records: List<DropParsedRecord>, headings: Map<
         val size = target.dropPoolGroups.sumOf { it.items.size }
         val note = target.fields.singleOrNull { it.label == "本节掉落说明" }?.value.orEmpty()
         val declared = target.fields.singleOrNull { it.label == "池规模" }?.value.orEmpty()
-        size > 0 && Regex("""(\d+)\s*项""").matchEntire(declared)?.groupValues?.get(1)?.toIntOrNull() == size &&
+        size > 0 && declaredPoolItemCount(declared) == size &&
             tierPoolDeclaration.find(note)?.groupValues?.get(1)?.toIntOrNull() == size &&
             elite != null && byScope[elite].orEmpty().none { it.entry.isDropPool }
     }

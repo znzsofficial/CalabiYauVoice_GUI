@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.meme.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.meme.model.MemeEntry
 import com.nekolaska.calabiyau.feature.wiki.meme.model.MemeOfficialIssue
 import com.nekolaska.calabiyau.feature.wiki.meme.model.MemePage
@@ -87,7 +88,7 @@ object MemeParsers {
     private fun Element.cleanText(): String {
         val copy = clone()
         copy.select("style,script,.mw-editsection").remove()
-        return copy.text().replace(Regex("\\s+"), " ").trim()
+        return copy.text().collapseWikiWhitespace().trim()
     }
 
     private fun Element.imageUrl(): String? {

@@ -1,6 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.game.api
 
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
+import com.nekolaska.calabiyau.core.wiki.UnusableWikiHtml
+import com.nekolaska.calabiyau.core.wiki.WikiArticleLoader
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
 import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
@@ -9,6 +12,7 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAG
 import data.ApiResult
 import data.ErrorKind
 import data.ioApiCall
+import data.toErrorKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -61,10 +65,13 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameModeDetail>> =
         fetchFromSource(forceRefresh = forceRefresh)
 
-    private suspend fun fetchFromSource(
+    override fun shouldCache(value: List<GameModeDetail>) = value.size == MODES.size
+
+    internal suspend fun fetchFromSource(
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
-        focusedMode: ModeEntry? = null
+        focusedMode: ModeEntry? = null,
+        load: WikiArticleLoader = WikiParseSource::loadArticle
     ): ApiResult<List<GameModeDetail>> =
         ioApiCall("获取游戏模式失败") {
             // The extraction article declares its maps; opening its introduction needs only this page.
@@ -72,25 +79,25 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
 
             val results = coroutineScope {
                 (focusedMode?.let(::listOf) ?: MODES).map { mode ->
-                    async { fetchMode(mode, modeMapMapping, forceRefresh, cacheOnly) }
+                    async {
+                        try {
+                            val snapshot = GameModeRemoteSource.readMode(mode, modeMapMapping[mode.displayName].orEmpty(),
+                                forceRefresh, cacheOnly, load)
+                            snapshot?.let { ApiResult.Success(it.value, isOffline = it.isFromCache, cacheAgeMs = it.ageMs) }
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: UnusableWikiHtml) { ApiResult.Error(e.message.orEmpty(), kind = ErrorKind.PARSE) }
+                        catch (e: Exception) { ApiResult.Error("获取${mode.displayName}失败", kind = e.toErrorKind()) }
+                    }
                 }.awaitAll()
             }
 
-            val data = results.filterNotNull()
+            val data = results.filterIsInstance<ApiResult.Success<GameModeDetail>>()
             if (data.isEmpty()) {
-                ApiResult.Error("获取游戏模式失败", kind = ErrorKind.NETWORK)
+                results.filterIsInstance<ApiResult.Error>().firstOrNull() ?: ApiResult.Error("获取游戏模式失败", kind = ErrorKind.NETWORK)
             } else {
-                val isOffline = data.any { it.isFromCache }
-                val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
-                ApiResult.Success(data.map { it.detail }, isOffline = isOffline, cacheAgeMs = maxAge)
+                ApiResult.Success(data.map { it.value }, isOffline = data.any { it.isOffline }, cacheAgeMs = data.maxOf { it.cacheAgeMs })
             }
         }
-
-    private data class ModeResult(
-        val detail: GameModeDetail,
-        val isFromCache: Boolean,
-        val ageMs: Long
-    )
 
     private suspend fun fetchModeMapMapping(forceRefresh: Boolean, cacheOnly: Boolean): Map<String, List<String>> {
         return try {
@@ -107,31 +114,4 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
         }
     }
 
-    private suspend fun fetchMode(
-        mode: ModeEntry,
-        modeMapMapping: Map<String, List<String>>,
-        forceRefresh: Boolean,
-        cacheOnly: Boolean
-    ): ModeResult? {
-        return try {
-            val sourceResult = if (cacheOnly) {
-                GameModeRemoteSource.loadCachedModeWikitext(mode.pageName)
-            } else {
-                GameModeRemoteSource.fetchModeWikitext(mode.pageName, forceRefresh)
-            } ?: return null
-            val detail = GameModeParsers.parseModeWikitext(
-                mode,
-                sourceResult.wikitext,
-                modeMapMapping[mode.displayName] ?: emptyList()
-            )
-            if (detail.summary.isBlank() && detail.winCondition.isBlank() &&
-                detail.settings.isBlank() && detail.maps.isEmpty()
-            ) return null
-            ModeResult(detail = detail, isFromCache = sourceResult.isFromCache, ageMs = sourceResult.ageMs)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

@@ -2,7 +2,13 @@ package com.nekolaska.calabiyau.feature.wiki.map.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiArticleLoader
+import com.nekolaska.calabiyau.core.wiki.WikiArticleRequest
+import com.nekolaska.calabiyau.core.wiki.WikiArticleSnapshot
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
+import com.nekolaska.calabiyau.feature.wiki.map.parser.MapDetailParsers
 import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
@@ -10,13 +16,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import util.buildWikiUrl
 
 data class MapListSourceResult(
-    val html: String,
-    val isFromCache: Boolean,
-    val ageMs: Long
-)
-
-data class MapDetailSourceResult(
-    val wikitext: String,
     val html: String,
     val isFromCache: Boolean,
     val ageMs: Long
@@ -70,21 +69,17 @@ object MapRemoteSource {
         )
     }
 
-    suspend fun fetchMapDetailPayload(mapName: String, forceRefresh: Boolean): MapDetailSourceResult? {
-        val result = WikiParseSource.fetchHtmlAndWikitext(
-            pageName = mapName,
-            cacheType = OfflineCache.Type.MAP_DETAIL,
-            cacheKey = mapName,
-            forceRefresh = forceRefresh
-        ) ?: return null
+    internal suspend fun readMapDetail(mapName: String, forceRefresh: Boolean, cacheOnly: Boolean,
+        load: WikiArticleLoader): WikiArticleSnapshot<out MapDetail?>? {
+        val type = OfflineCache.Type.MAP_DETAIL
+        if (mapName == RIFT_MAP) {
+            val request = WikiArticleRequest(mapName, type, mapName, forceRefresh, cacheOnly)
+            return WikiParseSource.readArticle(request, load, MapDetailParsers::validatedRift)
+        }
+        val result = (if (cacheOnly) WikiParseSource.loadCachedHtmlAndWikitext(type, mapName)
+            else WikiParseSource.fetchHtmlAndWikitext(mapName, type, mapName, forceRefresh)) ?: return null
         val wikitext = result.wikitext ?: return null
-        val html = result.html.orEmpty()
-
-        return MapDetailSourceResult(
-            wikitext = wikitext,
-            html = html,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
-        )
+        val detail = MapDetailParsers.parseMapWikitext(mapName, wikitext, result.html.orEmpty())
+        return WikiArticleSnapshot(detail, result.isFromCache, result.ageMs)
     }
 }

@@ -16,6 +16,7 @@ Gradle 命令在仓库根目录运行；下表使用 Windows 写法，macOS/Linu
 | 任务 | 命令 |
 | --- | --- |
 | 编译 Android Debug | `.\gradlew.bat :androidApp:compileDebugKotlin` |
+| 核对 Android／共享 Kotlin 正则字面量（Windows、Linux） | `python scripts/check_android_icu_regex.py` |
 | 启动 Windows 客户端 | `.\gradlew.bat run` |
 | 启动网页开发服务 / 类型检查 | `pnpm dev` / `pnpm check` |
 | 本地 Worker 集成测试 | `pnpm test:worker` |
@@ -26,5 +27,5 @@ Gradle 命令在仓库根目录运行；下表使用 Windows 写法，macOS/Linu
 
 - 发布遵循[版本发布清单](docs/release-version-checklist.md)。`webDist` 会构建签名 APK、改写 `latest.json` 并上传 R2；`webPush` 会构建并部署站点与 Worker；`webDeploy` 串起两者。它们不是本地验证命令。
 - 不提交 APK、`local.properties`、签名密钥、生产凭据或 `downloadPage/wrangler.toml`。不手改 `androidApp/build/`、`downloadPage/dist/` 等生成物。
-- `.agents/` 是忽略的本机目录，不作为项目文档来源。`.github/` 下跟踪的是 `.github/workflows/`，包含每日 Wiki smoke CI。
+- `.agents/` 是忽略的本机目录，不作为项目文档来源。`.github/workflows/` 包含每日 Wiki smoke CI，以及 Android／共享源码变更时运行的离线 ICU 语法检查。
 - 新规则写进负责该行为的专题。上线产物、部署与检查结果写进[发布记录](docs/releases/README.md)；带日期的旧计划、审计和交接不是当前待办。只有跨模块规则、命令或文档入口变动时才更新本文件。

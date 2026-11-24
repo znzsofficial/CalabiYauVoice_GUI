@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.meow.parser
 
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.meow.model.MeowLanguageGroup
 import com.nekolaska.calabiyau.feature.wiki.meow.model.MeowLanguageSection
 import org.jsoup.Jsoup
@@ -100,6 +101,6 @@ object MeowLanguageParsers {
     }
 
     private fun String.normalizeText(): String = trim()
-        .replace(Regex("\\s+"), " ")
+        .collapseWikiWhitespace()
         .trim(' ', '：')
 }

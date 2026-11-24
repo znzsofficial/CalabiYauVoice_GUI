@@ -24,6 +24,7 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUr
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import util.wikiPathEncode
@@ -38,7 +39,8 @@ fun GameModeScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)? = null,
-    focusedMode: ModeEntry? = null
+    focusedMode: ModeEntry? = null,
+    onOpenExtractionMode: (() -> Unit)? = null
 ) {
     val state = rememberLoadState(
         initial = emptyList<GameModeDetail>(),
@@ -57,6 +59,7 @@ fun GameModeScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
+                    if (focusedMode != null) RefreshActionButton(onClick = { state.reload(forceRefresh = true) }, enabled = !state.isLoading)
                     OpenWikiActionButton(
                         wikiUrl = extractionArticleUrl(focusedMode?.pageName ?: "战斗模式"),
                         onOpenWikiUrl = onOpenWikiUrl,
@@ -76,6 +79,9 @@ fun GameModeScreen(
                     ModeReader(mode, onMap = { name ->
                         if (onOpenMapDetail != null) onOpenMapDetail(name, null)
                         else onOpenWikiUrl("https://wiki.biligame.com/klbq/${name.wikiPathEncode()}")
+                    }, onOpenLink = { url ->
+                        val map = mode.maps.firstOrNull { extractionArticleUrl(it) == url }
+                        if (map != null && onOpenMapDetail != null) onOpenMapDetail(map, null) else onOpenWikiUrl(url)
                     })
                 }
                 return@ApiResourceContent
@@ -93,7 +99,8 @@ fun GameModeScreen(
                             expandedMode = if (expandedMode == mode.name) null else mode.name
                         },
                         onOpenWikiUrl = onOpenWikiUrl,
-                        onOpenMapDetail = onOpenMapDetail
+                        onOpenMapDetail = onOpenMapDetail,
+                        onReadMode = onOpenExtractionMode.takeIf { mode.name == GameModeApi.EXTRACTION_MODE.displayName }
                     )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
@@ -108,7 +115,8 @@ private fun GameModeCard(
     isExpanded: Boolean,
     onToggle: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
-    onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?
+    onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?,
+    onReadMode: (() -> Unit)?
 ) {
     Card(
         shape = smoothCornerShape(28.dp),
@@ -211,7 +219,7 @@ private fun GameModeCard(
 
                 // 查看完整页面
                 Surface(
-                    onClick = { onOpenWikiUrl(mode.wikiUrl) },
+                    onClick = onReadMode ?: { onOpenWikiUrl(mode.wikiUrl) },
                     shape = smoothCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                 ) {

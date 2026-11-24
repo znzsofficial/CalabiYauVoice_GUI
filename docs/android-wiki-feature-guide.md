@@ -67,6 +67,9 @@ For simple HTML-only parse pages, use `fetchWikiHtmlPage(...)` instead of repeat
 
 Parser robustness checklist:
 
+- Android and the desktop JVM have different regex engines. Compile fixed patterns once in their owning parser, not for each Wiki row, text node, or keystroke. Use `Regex.escape` for dynamic literal names; don't keep an unbounded map of player-entered patterns. Keep domain-specific capture groups and the distinction between `find` and `matchEntire` at the call site.
+- Use `htmlHeadingLevel()` for Jsoup headings and `collapseWikiWhitespace()` for collapsing a run of whitespace without trimming the span's edges. `withoutWikiComments()` ignores unpublished markup, including a trailing unclosed comment. For mode articles `readWikiTableDeclaration` reads `{|`, `|-` and `|}` as line markers, not a multi-line regex. Activity tables use `ActivityDetailTables` to check row and cell shapes, free/paid captions and declared reward quantities against the same revision.
+- `python scripts/check_android_icu_regex.py` checks directly recoverable Kotlin pattern literals from Android and its shared source sets against host ICU (Windows/Linux; no Gradle or Wiki access). It reports skipped dynamic expressions separately. [CI](../.github/workflows/android-regex.yml) runs this syntax check on affected paths; parser fixtures verify *what matches*, and `ActivityDetailAndroidTest` runs the real activity parser on ART. A successful host check isn't device acceptance. See [device acceptance](device-acceptance.md).
 - Skip page chrome or intro images that appear before the first content heading when appropriate.
 - Deduplicate by stable IDs such as file name, page title, item name plus section, or URL.
 - Normalize whitespace in captions and text fields.

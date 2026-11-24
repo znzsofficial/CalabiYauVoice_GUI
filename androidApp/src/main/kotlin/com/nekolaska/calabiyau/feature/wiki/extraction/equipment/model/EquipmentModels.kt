@@ -30,7 +30,7 @@ internal data class EquipmentVariant(
     val numericValue: Long, val numericRate: Double
 ) {
     val attributes get() = stats.fields + extraStats
-    val searchText = (listOf(id.toString(), quality.label, description, lootText, value) + tags + sourceTags.values +
+    val searchText = (listOf(id.toString(), quality.label, description, lootText, value, numericValue.toString()) + tags + sourceTags.values +
         attributes.map { "${it.key} ${it.value}" }).joinToString("\n")
 }
 

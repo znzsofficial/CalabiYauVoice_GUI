@@ -238,7 +238,7 @@ internal fun EquipmentDetail(
 
 private fun EquipmentVariant.displayFields(): Map<String, String> = buildMap {
     putAll(attributes)
-    put("价值", value)
+    put("价值", if (value.endsWith('万') || value.endsWith('亿')) numericValue.toString() else value)
     if (!containsKey("重量")) put("重量", weight)
     val costs = sourceTags["用途"].orEmpty().split(" · ")
     costs.firstOrNull { it.startsWith("售价 ") }?.let { put("售价", it.removePrefix("售价 ")) }

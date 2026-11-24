@@ -38,7 +38,9 @@ internal class WeaponPublishedSections(document: Document) {
         }.distinct()
 
     fun augmentations(templates: Sequence<Map<String, String>>): List<WeaponAugmentMode> {
-        val modes = templates.filter { !it["模式"].isNullOrBlank() }.groupBy { it.getValue("模式") }
+        // The Wiki template uses {{{模式|爆破模式}}}: absent and explicitly empty are different.
+        // option() still requires the corresponding mode-qualified target AND its unique panel.
+        val modes = templates.groupBy { it.getOrDefault("模式", "爆破模式") }.filterKeys { it.isNotBlank() }
         if (modes.isEmpty()) return emptyList()
         val groups = section(augmentationTitle).filter { it.hasClass("growth3") }
             .flatMap { it.select(".upgrade-group") }

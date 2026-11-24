@@ -83,6 +83,7 @@ import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 import data.ApiResult
@@ -285,6 +286,16 @@ private val hubSearchEntries = listOf(
         "extraction_hub", "弦溯战线", "物资、装备与掉落",
         listOf("弦溯战线专题", "搜打撤", "搜打撤专题", "撤离"),
         Icons.Outlined.Explore, WikiRoute.ExtractionHub
+    ),
+    searchEntry(
+        "extraction_mode", "弦溯战线模式介绍", "等级成长、角色天赋、任务与局内事件",
+        listOf("搜打撤等级", "等级成长系统", "弦溯天赋", "弦溯任务", "任务系统", "局内事件"),
+        Icons.Outlined.Explore, WikiRoute.ExtractionMode
+    ),
+    searchEntry(
+        "extraction_map_guide", "维里昂裂隙地图资料", "互动地图、难度准入、区域与钥匙房",
+        listOf("弦溯互动地图", "搜打撤地图", "互动地图", "弦溯地图", "钥匙房", "楼层结构"),
+        Icons.Outlined.Map, WikiRoute.MapDetail(RIFT_MAP, null)
     ),
     searchEntry(
         "extraction_loot", "弦溯战线物资图鉴", "材料、消耗品、收藏品、弹药、背包与钥匙卡",

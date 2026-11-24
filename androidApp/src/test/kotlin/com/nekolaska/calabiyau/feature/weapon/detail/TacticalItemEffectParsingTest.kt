@@ -57,6 +57,11 @@ class TacticalItemEffectParsingTest {
         assertEquals("投掷后生效。\n• 范围 < 5m\n• 持续时间：8秒\n补充说明。", effect)
     }
 
+    @Test fun adjacentExternalAndWikiLinksKeepTheirLabelsAndFollowingBracket() {
+        assertEquals("外部 说明与内部名称]", TacticalItemEffectParser.parse("",
+            "[https://example.test/?page=1 外部 说明]与[[页面|内部名称]]]"))
+    }
+
     @Test fun emptyEffectDoesNotBecomeTheWholePageOrAnError() {
         val detail = WeaponDetailApi.parseWeaponWikitext(
             "测试道具", "{{武器-战术道具|武器介绍=仅介绍|效果=}}",

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.bgm.parser
 
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.bgm.model.BgmAlbum
 import com.nekolaska.calabiyau.feature.wiki.bgm.model.BgmAlbumTrack
 import com.nekolaska.calabiyau.feature.wiki.bgm.model.BgmPage
@@ -9,6 +10,10 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 
 object BgmParsers {
+    private val numberedTitle = Regex("""^\d+[.、]\s*""")
+    private val numberedTrack = Regex("""^\d+[.]\s*""")
+    private val titlePunctuation = Regex("""[《》（）()\[\]【】\s_-]""")
+    private val numberPrefix = Regex("""^\d+[.、]""")
 
     fun parsePage(html: String): BgmPage {
         val document = Jsoup.parse(html)
@@ -122,7 +127,7 @@ object BgmParsers {
                 val cells = row.select("td").map { it.cleanText() }
                 if (cells.isEmpty()) return@mapNotNull null
                 BgmAlbumTrack(
-                    title = cells.getOrNull(0).orEmpty().replace(Regex("^\\d+[.、]\\s*"), "").trim(),
+                    title = cells.getOrNull(0).orEmpty().replace(numberedTitle, "").trim(),
                     duration = cells.getOrNull(1)?.takeIf { it.isNotBlank() },
                     scene = cells.getOrNull(2)?.takeIf { it.isNotBlank() }
                 )
@@ -173,7 +178,7 @@ object BgmParsers {
             ?.select("li")
             ?.mapNotNull { li ->
                 li.cleanText()
-                    .replace(Regex("^\\d+[.]\\s*"), "")
+                    .replace(numberedTrack, "")
                     .takeUnless { it.startsWith("操作方法") || it.startsWith("单击") || it.startsWith("双击") }
                     ?.takeIf { it.isNotBlank() }
             }
@@ -208,8 +213,8 @@ object BgmParsers {
 
     private fun String.normalizedKey(): String {
         return lowercase()
-            .replace(Regex("[《》（）()\\[\\]【】\\s_-]"), "")
-            .replace(Regex("^\\d+[.、]"), "")
+            .replace(titlePunctuation, "")
+            .replace(numberPrefix, "")
     }
 
     private fun Element.headingText(): String = selectFirst(".mw-headline")?.cleanText().orEmpty().ifBlank { cleanText() }
@@ -217,7 +222,7 @@ object BgmParsers {
     private fun Element.cleanText(): String {
         val copy = clone()
         copy.select("style,script,.mw-editsection").remove()
-        return copy.text().replace(Regex("\\s+"), " ").trim()
+        return copy.text().collapseWikiWhitespace().trim()
     }
 
     private data class ParseContext(

@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.collaboration.parser
 
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationEvent
 import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationPage
@@ -149,13 +150,13 @@ object CollaborationParsers {
     private fun Element.cleanText(): String {
         val copy = clone()
         copy.select("style,script,.mw-editsection").remove()
-        return copy.text().replace(Regex("\\s+"), " ").trim()
+        return copy.text().collapseWikiWhitespace().trim()
     }
 
     private fun Element.textWithLineBreaks(): String =
         HtmlText.textWithLineBreaks(this)
 
-    private fun String.cleanLine(): String = replace(Regex("\\s+"), " ").trim()
+    private fun String.cleanLine(): String = collapseWikiWhitespace().trim()
 
     private fun Element.imageUrl(): String? {
         val src = attr("src").takeIf { it.isNotBlank() } ?: return null

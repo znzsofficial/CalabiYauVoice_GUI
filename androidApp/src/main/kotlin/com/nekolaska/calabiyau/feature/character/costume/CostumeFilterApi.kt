@@ -4,6 +4,7 @@ import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.core.wiki.SkinCatalogMarkup
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import data.ApiResult
 import data.ErrorKind
@@ -131,7 +132,8 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
     }
 
     private fun parseCostumeCard(card: Element, usedKeys: MutableSet<String>): CostumeInfo? {
-        val character = card.attr("data-param1").trim()
+        val fields = SkinCatalogMarkup.cardFields(card)
+        val character = fields.owner
         if (character.isBlank()) return null
 
         val name = card.firstBySkinClass("name")?.text()?.trim()
@@ -150,10 +152,10 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         return CostumeInfo(
             name = protectedName,
             character = character,
-            quality = Quality.fromLevel(card.attr("data-param2")),
-            sources = card.attr("data-param3").split(",").map { it.trim() }.filter { it.isNotBlank() },
-            crystalCost = card.attr("data-param4").replace("无", "").trim(),
-            baseCost = card.attr("data-param5").replace("无", "").trim(),
+            quality = Quality.fromLevel(fields.qualityLevel),
+            sources = fields.sources,
+            crystalCost = fields.crystalCost,
+            baseCost = fields.baseCost,
             description = description,
             thumbnailUrl = previewImage?.attr("src")?.takeIf { it.isNotBlank() },
             fullImageUrl = originalImageUrl(previewImage),
@@ -184,28 +186,25 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
     }
 
     private fun parseLegacyCostumeTable(html: String): List<CostumeInfo> {
-        val blockRegex = Regex(
-            """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
-        )
         val usedKeys = mutableSetOf<String>()
 
-        return blockRegex.findAll(html).map { match ->
-            val character = match.groupValues[1].trim()
-            val info = parseCostumeDetail(match.groupValues[6], character)
+        return SkinCatalogMarkup.legacyRows(html).map { (fields, body) ->
+            val character = fields.owner
+            val info = parseCostumeDetail(body, character)
             val protectedName = uniqueDisplayName(
                 baseName = info.name,
                 ownerName = character,
-                identity = extractIdentitySuffix(match.groupValues[6]),
+                identity = extractIdentitySuffix(body),
                 usedKeys = usedKeys
             )
 
             CostumeInfo(
                 name = protectedName,
                 character = character,
-                quality = Quality.fromLevel(match.groupValues[2]),
-                sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
-                crystalCost = match.groupValues[4].replace("无", "").trim(),
-                baseCost = match.groupValues[5].replace("无", "").trim(),
+                quality = Quality.fromLevel(fields.qualityLevel),
+                sources = fields.sources,
+                crystalCost = fields.crystalCost,
+                baseCost = fields.baseCost,
                 description = info.description,
                 thumbnailUrl = info.thumbnailUrl,
                 fullImageUrl = info.fullImageUrl,
@@ -232,7 +231,9 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "$character：未知"
-        val description = parseDescription(blockHtml)
+        val description = SkinCatalogMarkup.legacyDescription(blockHtml) { compact ->
+            qualityPrefix.containsMatchIn(compact) || compact.contains("单时装价格")
+        }
 
         return ParsedVisualInfo(
             name = name,
@@ -243,48 +244,8 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         )
     }
 
-    private fun parseDescription(blockHtml: String): String {
-        val columns = splitTableColumns(blockHtml)
-        if (columns.size < 2) return ""
-
-        val firstContentIndex = columns.indexOfFirst { htmlColumnToText(it).isNotBlank() }
-        if (firstContentIndex == -1) return ""
-
-        return columns
-            .asSequence()
-            .mapIndexed { index, column -> index to htmlColumnToText(column) }
-            .filter { (index, _) -> index > firstContentIndex }
-            .map { (_, text) -> text }.lastOrNull { it.isLikelyDescription() }
-            .orEmpty()
-    }
-
-    private fun splitTableColumns(blockHtml: String): List<String> {
-        return Regex("""(?m)^\|\s*""")
-            .split(blockHtml)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-    }
-
-    private fun htmlColumnToText(html: String): String {
-        if (html.isBlank()) return ""
-        return HtmlText.detail(Jsoup.parseBodyFragment(html).body(), preserveTextLines = true)
-    }
-
-    private fun String.isLikelyDescription(): Boolean {
-        val compact = replace(Regex("""\s+"""), "")
-        if (compact.length < 12) return false
-        if (Regex("""^\d+(晶核|基弦)?$""").matches(compact)) return false
-        if (compact.contains('|')) return false
-        if (Regex("""^\d(初始|精致|卓越|完美|传说|私服)""").containsMatchIn(compact)) return false
-        if (compact.contains("单时装价格") || compact.contains("套装限时价格") || compact.contains("原价") ||
-            compact.contains("飘飞特效") || compact.contains("进阶外观") || compact.contains("定向匣单次抽取价格")) return false
-        if (compact.endsWith("活动兑换") || compact.endsWith("活动奖励") || compact.endsWith("赛季奖励") ||
-            compact.endsWith("活动获得") || compact.endsWith("兑换获得")) return false
-        if (compact.contains("活动商城") || compact.contains("限时商城购买") || compact.contains("签到活动获得") ||
-            compact.contains("获得对应角色时装")) return false
-        return true
-    }
-
+    private val qualityPrefix = Regex("""^\d(初始|精致|卓越|完美|传说|私服)""")
+    private val identitySuffix = Regex("""角色时装图鉴\s*(\d+)""")
 
     private data class ParsedVisualInfo(
         val name: String,
@@ -322,7 +283,7 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
     }
 
     private fun extractIdentitySuffix(blockHtml: String): String {
-        return Regex("""角色时装图鉴\s*(\d+)""")
+        return identitySuffix
             .find(blockHtml)
             ?.groupValues?.get(1)
             .orEmpty()

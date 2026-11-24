@@ -4,6 +4,7 @@ import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.core.wiki.SkinCatalogMarkup
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import data.ApiResult
@@ -185,18 +186,15 @@ object WeaponSkinFilterApi {
         }
 
         // Legacy fallback: wikitext table rows |- class="divsort" data-param1=...
-        val blockRegex = Regex(
-            """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
-        )
         val usedKeys = mutableSetOf<String>()
 
-        val items = blockRegex.findAll(html).map { match ->
-            val weapon = match.groupValues[1].trim()
-            val info = parseWeaponSkinDetail(match.groupValues[6], weapon)
+        return SkinCatalogMarkup.legacyRows(html).map { (fields, body) ->
+            val weapon = fields.owner
+            val info = parseWeaponSkinDetail(body, weapon)
             val protectedName = uniqueDisplayName(
                 baseName = info.name,
                 ownerName = weapon,
-                blockHtml = match.groupValues[6],
+                blockHtml = body,
                 usedKeys = usedKeys
             )
 
@@ -205,23 +203,22 @@ object WeaponSkinFilterApi {
                 weapon = weapon,
                 weaponCategory = weaponMeta[weapon]?.category ?: "其他",
                 weaponType = weaponMeta[weapon]?.type.orEmpty(),
-                quality = Quality.fromLevel(match.groupValues[2]),
-                sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
-                crystalCost = match.groupValues[4].replace("无", "").trim(),
-                baseCost = match.groupValues[5].replace("无", "").trim(),
+                quality = Quality.fromLevel(fields.qualityLevel),
+                sources = fields.sources,
+                crystalCost = fields.crystalCost,
+                baseCost = fields.baseCost,
                 description = info.description,
                 thumbnailUrl = info.thumbnailUrl,
                 fullImageUrl = info.fullImageUrl,
                 screenshotUrl = info.screenshotUrl
             )
         }.toList()
-
-        return items
     }
 
     /** Parses one div.klbq-skin-card element from the current Lua module markup. */
     private fun parseSkinCard(card: Element, weaponMeta: Map<String, WeaponMeta>): WeaponSkinInfo {
-        val weapon = card.attr("data-param1").trim()
+        val fields = SkinCatalogMarkup.cardFields(card)
+        val weapon = fields.owner
         val fullTextName = card.selectFirst("[class*=name]")?.text()?.trim().orEmpty()
         // The card name is already "武器：外观名"; fall back to weapon-prefixed forms.
         val name = when {
@@ -238,10 +235,10 @@ object WeaponSkinFilterApi {
             weapon = weapon,
             weaponCategory = weaponMeta[weapon]?.category ?: "其他",
             weaponType = weaponMeta[weapon]?.type.orEmpty(),
-            quality = Quality.fromLevel(card.attr("data-param2")),
-            sources = card.attr("data-param3").split(",").map { it.trim() }.filter { it.isNotBlank() },
-            crystalCost = card.attr("data-param4").replace("无", "").trim(),
-            baseCost = card.attr("data-param5").replace("无", "").trim(),
+            quality = Quality.fromLevel(fields.qualityLevel),
+            sources = fields.sources,
+            crystalCost = fields.crystalCost,
+            baseCost = fields.baseCost,
             description = HtmlText.detail(card.selectFirst("[class*=desc] [class*=value]")),
             thumbnailUrl = previewImage?.attr("src")?.takeIf { it.isNotBlank() },
             fullImageUrl = WikiImageUrls.originalFromThumbnail(
@@ -321,7 +318,9 @@ object WeaponSkinFilterApi {
             }
             ?.takeIf { it.isNotBlank() }
             ?: "$weapon：未知"
-        val description = parseDescription(blockHtml)
+        val description = SkinCatalogMarkup.legacyDescription(blockHtml) { compact ->
+            qualityPrefix.containsMatchIn(compact) || compact.contains("单外观价格") || compact.contains("武器皮肤套装")
+        }
 
         return ParsedSkinVisualInfo(
             name = name,
@@ -332,48 +331,8 @@ object WeaponSkinFilterApi {
         )
     }
 
-    private fun parseDescription(blockHtml: String): String {
-        val columns = splitTableColumns(blockHtml)
-        if (columns.size < 2) return ""
-
-        val firstContentIndex = columns.indexOfFirst { htmlColumnToText(it).isNotBlank() }
-        if (firstContentIndex == -1) return ""
-
-        return columns
-            .asSequence()
-            .mapIndexed { index, column -> index to htmlColumnToText(column) }
-            .filter { (index, _) -> index > firstContentIndex }
-            .map { (_, text) -> text }.lastOrNull { it.isLikelyDescription() }
-            .orEmpty()
-    }
-
-    private fun splitTableColumns(blockHtml: String): List<String> {
-        return Regex("""(?m)^\|\s*""")
-            .split(blockHtml)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-    }
-
-    private fun htmlColumnToText(html: String): String {
-        if (html.isBlank()) return ""
-        return HtmlText.detail(Jsoup.parseBodyFragment(html).body(), preserveTextLines = true)
-    }
-
-    private fun String.isLikelyDescription(): Boolean {
-        val compact = replace(Regex("""\s+"""), "")
-        if (compact.length < 12) return false
-        if (Regex("""^\d+(晶核|基弦)?$""").matches(compact)) return false
-        if (compact.contains('|')) return false
-        if (Regex("""^\d(精致|卓越|完美|传说|臻藏)""").containsMatchIn(compact)) return false
-        if (compact.contains("单外观价格") || compact.contains("套装限时价格") || compact.contains("原价") ||
-            compact.contains("飘飞特效") || compact.contains("进阶外观") || compact.contains("定向匣单次抽取价格")) return false
-        if (compact.endsWith("活动兑换") || compact.endsWith("活动奖励") || compact.endsWith("赛季奖励") ||
-            compact.endsWith("活动获得") || compact.endsWith("兑换获得")) return false
-        if (compact.contains("活动商城") || compact.contains("限时商城购买") || compact.contains("签到活动获得") ||
-            compact.contains("获得对应角色时装") || compact.contains("武器皮肤套装")) return false
-        return true
-    }
-
+    private val qualityPrefix = Regex("""^\d(精致|卓越|完美|传说|臻藏)""")
+    private val identitySuffix = Regex("""武器外观图鉴\s*(\d+)""")
 
     private data class ParsedSkinVisualInfo(
         val name: String,
@@ -390,12 +349,12 @@ object WeaponSkinFilterApi {
         usedKeys: MutableSet<String>
     ): String {
         val normalizedBase = baseName.ifBlank { "$ownerName：未知" }
-        val identity = extractIdentitySuffix(blockHtml)
         var candidate = normalizedBase
         var key = candidate + ownerName
 
         if (usedKeys.add(key)) return candidate
 
+        val identity = identitySuffix.find(blockHtml)?.groupValues?.get(1).orEmpty()
         if (identity.isNotBlank()) {
             candidate = "$normalizedBase#$identity"
             key = candidate + ownerName
@@ -409,13 +368,6 @@ object WeaponSkinFilterApi {
             if (usedKeys.add(key)) return candidate
             index++
         }
-    }
-
-    private fun extractIdentitySuffix(blockHtml: String): String {
-        return Regex("""武器外观图鉴\s*(\d+)""")
-            .find(blockHtml)
-            ?.groupValues?.get(1)
-            .orEmpty()
     }
 
 }

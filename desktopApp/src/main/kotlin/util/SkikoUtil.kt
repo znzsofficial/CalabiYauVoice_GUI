@@ -9,11 +9,10 @@ internal fun <T : JComponent> findComponent(
     container: Container,
     klass: Class<T>,
 ): T? {
-    val componentSequence = container.components.asSequence()
-    return componentSequence.filter { klass.isInstance(it) }.ifEmpty {
-        componentSequence.filterIsInstance<Container>()
-            .mapNotNull { findComponent(it, klass) }
-    }.map { klass.cast(it) }.firstOrNull()
+    val children = container.components
+    // Prefer any direct child over a match nested in an earlier sibling.
+    return children.firstOrNull(klass::isInstance)?.let(klass::cast)
+        ?: children.firstNotNullOfOrNull { child -> if (child is Container) findComponent(child, klass) else null }
 }
 
 internal inline fun <reified T : JComponent> Container.findComponent() =

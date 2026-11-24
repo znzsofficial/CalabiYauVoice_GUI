@@ -27,6 +27,17 @@ class GameModeParsersTest {
         """).isEmpty())
     }
 
+    @Test fun skipsLiteralExamplesAndCommentsInSourceOrder() {
+        val mapping = GameModeParsers.parseModeMapMapping("""
+            <!-- <nowiki> {{Navbox|group1=[[战斗模式/注释]]|list1=[[乙]]}} -->
+            {{Navbox|group1=[[战斗模式/先公开]]|list1=[[甲]]}}
+            <NOWIKI><!-- {{Navbox|group1=[[战斗模式/示例]]|list1=[[甲]]}}</NOWIKI>
+            <nowiki/>{{Navbox|group1=[[战斗模式/公开]]|list1=[[丙]]}}
+            <!-- {{Navbox|group1=[[战斗模式/未公开]]|list1=[[丁]]}}
+        """)
+        assertEquals(mapOf("先公开" to listOf("甲"), "公开" to listOf("丙")), mapping)
+    }
+
     @Test
     fun mapsModesFromGroupedLists() {
         val mapping = GameModeParsers.parseModeMapMapping(

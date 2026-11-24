@@ -8,6 +8,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 object VotingParsers {
+    private val participantCount = Regex("""共有(\d+)\s*人投票""")
 
     fun parsePollConfigFromHtml(html: String): PollConfig? {
         val document = Jsoup.parse(html)
@@ -72,7 +73,7 @@ object VotingParsers {
             }
 
             if (votes == null) {
-                votes = Regex("""共有(\d+)\s*人投票""")
+                votes = participantCount
                     .find(container.text())
                     ?.groupValues?.get(1)?.toIntOrNull() ?: 0
             }

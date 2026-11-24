@@ -857,6 +857,11 @@ private fun detectExt(context: Context, input: PickedInput): String {
     return ""
 }
 
+private val srtTimeRange = Regex("""(\d{2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{1,3})""")
+private val lrcTimestamp = Regex("""\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]""")
+private val assDialogue = Regex("""^Dialogue:\s*[^,]*,([^,]+),([^,]+),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*)$""")
+private val assOverride = Regex("""\{[^}]*\}""")
+
 private fun parseSrtStream(reader: BufferedReader, startId: Long): Pair<List<TimelineClip>, Boolean> {
     reader.use {
         val out = mutableListOf<TimelineClip>()
@@ -880,14 +885,13 @@ private fun parseSrtStream(reader: BufferedReader, startId: Long): Pair<List<Tim
             textLines.clear()
         }
 
-        val timeRegex = Regex("""(\d{2}:\d{2}:\d{2}[,\.]\d{1,3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{1,3})""")
         it.lineSequence().forEach { raw ->
             val line = raw.trim()
             if (line.isBlank()) {
                 flush()
                 return@forEach
             }
-            val match = timeRegex.find(line)
+            val match = srtTimeRange.find(line)
             if (match != null) {
                 flush()
                 val s = parseSrtTime(match.groupValues[1])
@@ -906,12 +910,11 @@ private fun parseSrtStream(reader: BufferedReader, startId: Long): Pair<List<Tim
 private fun parseLrcStream(reader: BufferedReader, startId: Long): Pair<List<TimelineClip>, Boolean> {
     reader.use {
         val points = mutableListOf<Pair<Long, String>>()
-        val tagRegex = Regex("""\[(\d{1,2}):(\d{2})(?:[\.:](\d{1,3}))?]""")
 
         it.lineSequence().forEach { raw ->
-            val matches = tagRegex.findAll(raw).toList()
+            val matches = lrcTimestamp.findAll(raw).toList()
             if (matches.isEmpty()) return@forEach
-            val content = raw.replace(tagRegex, "").trim()
+            val content = raw.replace(lrcTimestamp, "").trim()
             matches.forEach { m ->
                 val mm = m.groupValues[1].toLongOrNull() ?: 0L
                 val ss = m.groupValues[2].toLongOrNull() ?: 0L
@@ -972,10 +975,8 @@ private fun parseAssStream(reader: BufferedReader, startId: Long): Pair<List<Tim
         var id = startId
         var truncated = false
 
-        val eventsRegex = Regex("""^Dialogue:\s*[^,]*,([^,]+),([^,]+),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*)$""")
-
         it.lineSequence().forEach { line ->
-            val match = eventsRegex.find(line.trim())
+            val match = assDialogue.find(line.trim())
             if (match != null) {
                 if (out.size >= MAX_CLIPS) {
                     truncated = true
@@ -984,7 +985,7 @@ private fun parseAssStream(reader: BufferedReader, startId: Long): Pair<List<Tim
                 val sMs = parseAssTime(match.groupValues[1])
                 val eMs = parseAssTime(match.groupValues[2])
                 val text = match.groupValues[9].replace("\\N", "\n").replace("\\n", "\n")
-                val cleanText = text.replace(Regex("""\{[^}]*\}"""), "")
+                val cleanText = text.replace(assOverride, "")
                 out += TimelineClip(id++, sMs, max(sMs + MIN_CLIP_MS, eMs), cleanText)
             }
         }

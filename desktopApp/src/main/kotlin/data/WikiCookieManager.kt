@@ -22,6 +22,8 @@ object WikiCookieManager {
 
     private const val WIKI_HOST = "wiki.biligame.com"
     private const val WIKI_URL = "https://wiki.biligame.com"
+    private val cookieHeaderRegex = Regex("""(?is)cookie\s*:\s*([^\r\n"']+)""")
+    private val cookieSeparatorRegex = Regex("[;\n]+")
 
     // 当前导入的原始 Cookie 字符串（用于回显）
     private var rawCookieString: String = ""
@@ -98,7 +100,7 @@ object WikiCookieManager {
         val trimmed = cookieStr.trim()
         if (trimmed.isBlank()) return ""
 
-        val headerMatch = Regex("""(?is)cookie\s*:\s*([^\r\n"']+)""").find(trimmed)
+        val headerMatch = cookieHeaderRegex.find(trimmed)
         val candidate = when {
             headerMatch != null -> headerMatch.groupValues[1]
             trimmed.startsWith("Cookie:", ignoreCase = true) -> trimmed.substringAfter(':')
@@ -117,7 +119,7 @@ object WikiCookieManager {
 
     private fun parseCookies(cookieStr: String): List<Cookie> {
         if (cookieStr.isBlank()) return emptyList()
-        return cookieStr.split(Regex("[;\n]+"))
+        return cookieStr.split(cookieSeparatorRegex)
             .mapNotNull { part ->
                 val trimmed = part.trim()
                 if (trimmed.isEmpty()) return@mapNotNull null

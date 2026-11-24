@@ -5,7 +5,7 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionEntryType
 import org.jsoup.nodes.Element
 
 private val mapSection = Regex("""地图场景容器(?:[（(]\s*(\d+)\s*个[）)])?""")
-private val itemCount = Regex("""(\d+)\s*项""")
+private val itemListTitle = Regex("""^(?:共用)?物品清单\s*·""")
 
 /** Cross-record evidence independent of a pool's own (possibly self-consistent but truncated) counts. */
 internal fun validateDropCatalog(root: Element, headings: Map<Int, String>, intros: Map<Int, String>,
@@ -16,7 +16,6 @@ internal fun validateDropCatalog(root: Element, headings: Map<Int, String>, intr
     // linkDropSharedPools returns one entry per raw record (before variant deduplication).
     val bySection = linked.indices.groupBy { records[it].scope }
     val sizes = linked.filter { it.isDropPool }.associate { pool -> pool.id to pool.dropPoolGroups.sumOf { it.items.size } }
-    val itemListTitle = Regex("""^(?:共用)?物品清单\s*·""")
     val itemLists = linked.filter { it.isDropPool && itemListTitle.containsMatchIn(it.name) }
         .map { it.id }.toSet()
     for ((scope, heading) in headings) {
@@ -64,7 +63,7 @@ internal fun validateDropCatalog(root: Element, headings: Map<Int, String>, intr
             // Compare like with like only under the item-list/distribution contract of the revised page.
             if (actual != null && (source.sharedPoolId in itemLists || mapItemLists || bothLists || scope in distributionStages)) {
                 source.fields.filter { it.label == "掉落池规模" }.forEach { field ->
-                    val declared = itemCount.matchEntire(field.value)?.groupValues?.get(1)?.toIntOrNull()
+                    val declared = declaredPoolItemCount(field.value)
                     if (declared != actual) issues += "drop-source ${source.name}: declares ${field.value}, list has $actual items"
                 }
             }

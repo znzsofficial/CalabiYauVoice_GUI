@@ -2,17 +2,17 @@ package com.nekolaska.calabiyau.feature.wiki.game.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.WikiArticleLoader
+import com.nekolaska.calabiyau.core.wiki.WikiArticleRequest
+import com.nekolaska.calabiyau.core.wiki.WikiArticleSnapshot
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
+import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
+import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAGE
 import data.SharedJson
 import kotlinx.serialization.json.*
 import util.buildParseUrl
-
-data class GameModeSourceResult(
-    val wikitext: String,
-    val isFromCache: Boolean,
-    val ageMs: Long
-)
 
 object GameModeRemoteSource {
 
@@ -37,33 +37,19 @@ object GameModeRemoteSource {
         )?.wikitext
     }
 
-    suspend fun fetchModeWikitext(pageName: String, forceRefresh: Boolean): GameModeSourceResult? {
-        val result = WikiParseSource.fetchWikitext(
-            pageName = pageName,
-            cacheType = OfflineCache.Type.GAME_MODES,
-            cacheKey = "mode_$pageName",
-            forceRefresh = forceRefresh
-        ) ?: return null
-        val wikitext = result.wikitext ?: return null
-
-        return GameModeSourceResult(
-            wikitext = wikitext,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
-        )
-    }
-
-    suspend fun loadCachedModeWikitext(pageName: String): GameModeSourceResult? {
-        val result = WikiParseSource.loadCachedWikitext(
-            cacheType = OfflineCache.Type.GAME_MODES,
-            cacheKey = "mode_$pageName"
-        ) ?: return null
-        val wikitext = result.wikitext ?: return null
-
-        return GameModeSourceResult(
-            wikitext = wikitext,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
-        )
+    internal suspend fun readMode(mode: ModeEntry, maps: List<String>, force: Boolean, cacheOnly: Boolean,
+        load: WikiArticleLoader): WikiArticleSnapshot<GameModeDetail>? {
+        val type = OfflineCache.Type.GAME_MODES
+        val key = "mode_${mode.pageName}"
+        if (mode.pageName == EXTRACTION_MODE_PAGE) {
+            return WikiParseSource.readArticle(WikiArticleRequest(mode.pageName, type, key, force, cacheOnly), load) { wt, html ->
+                wt?.let { GameModeParsers.validatedExtraction(mode, it, maps, html) }
+            }
+        }
+        val result = (if (cacheOnly) WikiParseSource.loadCachedWikitext(type, key)
+            else WikiParseSource.fetchWikitext(mode.pageName, type, key, force)) ?: return null
+        val detail = GameModeParsers.parseModeWikitext(mode, result.wikitext ?: return null, maps)
+        if (detail.summary.isBlank() && detail.winCondition.isBlank() && detail.settings.isBlank() && detail.maps.isEmpty()) return null
+        return WikiArticleSnapshot(detail, result.isFromCache, result.ageMs)
     }
 }

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.tips.parser
 
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.tips.model.GameTipsSection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
@@ -53,7 +54,7 @@ object GameTipsParsers {
         }
 
     private fun String.normalizeTip(): String = trim()
-        .replace(Regex("\\s+"), " ")
+        .collapseWikiWhitespace()
         .trim(' ', '：')
 
     private fun String.looksLikeTip(): Boolean {

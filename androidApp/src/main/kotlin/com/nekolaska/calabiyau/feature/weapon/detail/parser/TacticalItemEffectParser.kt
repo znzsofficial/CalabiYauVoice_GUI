@@ -5,6 +5,11 @@ import org.jsoup.Jsoup
 
 /** ITEM EFFECT is separate from the tactical item's short introduction. No network access. */
 internal object TacticalItemEffectParser {
+    private val wikiLink = Regex("""\[\[([^\[\]]+)\]\]""")
+    private val externalLink = Regex("""\[(https?://\S+)\s+([^\]]+)\]""")
+    private val emphasis = Regex("'{2,5}")
+    private val listMarker = Regex("""(?m)^\s*[*#]+\s*""")
+
     fun parse(renderedHtml: String, templateEffect: String): String {
         val rendered = Jsoup.parse(renderedHtml).select(".klbq-tac-effect__body")
             .map { cleanHtml(it.html()) }
@@ -16,12 +21,12 @@ internal object TacticalItemEffectParser {
         // Older cached responses can contain wikitext only. Preserve prose, breaks and links,
         // but do not leak #info tooltips or list/template punctuation into the native card.
         val fallback = expandTemplates(templateEffect)
-            .replace(Regex("""\[\[([^\[\]]+)]]""")) { match ->
+            .replace(wikiLink) { match ->
                 match.groupValues[1].substringAfterLast('|')
             }
-            .replace(Regex("""\[(https?://\S+)\s+([^]]+)]"""), "$2")
-            .replace(Regex("'{2,5}"), "")
-            .replace(Regex("(?m)^\\s*[*#]+\\s*"), "• ")
+            .replace(externalLink, "$2")
+            .replace(emphasis, "")
+            .replace(listMarker, "• ")
         return cleanHtml(fallback)
     }
 

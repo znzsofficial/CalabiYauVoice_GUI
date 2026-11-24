@@ -1,6 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
@@ -177,8 +179,10 @@ object GalleryParsers {
 
     private data class SrcSetCandidate(val url: String, val scale: Int)
 
+    private val descriptorSeparator = Regex("""\s+""")
+
     private fun parseSrcSetCandidate(raw: String): SrcSetCandidate? {
-        val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val parts = raw.trim().split(descriptorSeparator).filter { it.isNotBlank() }
         val url = normalizeImageUrl(parts.firstOrNull().orEmpty()) ?: return null
         val descriptor = parts.getOrNull(1).orEmpty()
         val scale = when {
@@ -212,7 +216,7 @@ object GalleryParsers {
         return runCatching { URLDecoder.decode(encodedPart, "UTF-8") }.getOrNull()
     }
 
-    private fun Element.isHeading(): Boolean = tagName().matches(Regex("h[1-6]"))
+    private fun Element.isHeading(): Boolean = htmlHeadingLevel() != null
 
     private fun extractHeadingText(element: Element): String {
         return element.selectFirst("span.mw-headline")?.text()?.cleanText()
@@ -224,7 +228,7 @@ object GalleryParsers {
         return link.selectFirst("img")?.attr("alt")?.cleanText()?.takeIf { it.isNotBlank() }
     }
 
-    private fun String.cleanText(): String = replace(Regex("\\s+"), " ").trim()
+    private fun String.cleanText(): String = collapseWikiWhitespace().trim()
 
     private fun defaultCaption(fileName: String): String {
         return fileName.substringBeforeLast('.')

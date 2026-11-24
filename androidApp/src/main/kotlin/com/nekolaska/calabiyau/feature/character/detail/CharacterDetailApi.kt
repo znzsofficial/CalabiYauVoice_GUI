@@ -6,6 +6,8 @@ import com.nekolaska.calabiyau.core.cache.VersionedMemoryCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -391,25 +393,36 @@ object CharacterDetailApi {
         return null
     }
 
+    private val whitespace = Regex("""\s+""")
+
     private fun normalizeText(text: String): String {
         return text
-            .replace(Regex("""\s+"""), "")
+            .replace(whitespace, "")
             .replace("：", ":")
             .trim()
     }
+
+    private val spoiler = Regex("""\{\{黑幕\|([^}]*?)\}\}""")
+    private val infoTooltip = Regex("""\{\{#info:[^}]*?\}\}""")
+    private val lineBreak = Regex("""<br\s*/?>\n?""")
+    private val bold = Regex("'''([^']*?)'''")
+    private val italic = Regex("''([^']*?)''")
+    private val labelledLink = Regex("""\[\[[^|\]]*?\|([^\]]*?)\]\]""")
+    private val plainLink = Regex("""\[\[([^\]]*?)\]\]""")
+    private val htmlTag = Regex("<[^>]+>")
 
     /** 清理 Wiki 标记 */
     private fun clean(raw: String?): String {
         if (raw.isNullOrBlank()) return ""
         return raw
-            .replace(Regex("\\{\\{黑幕\\|([^}]*?)\\}\\}"), "$1")       // {{黑幕|text}} → text
-            .replace(Regex("\\{\\{#info:[^}]*?\\}\\}"), "")              // {{#info:...|note}} → 移除
-            .replace(Regex("<br\\s*/?>\\n?"), "\n")                       // <br /> → 换行
-            .replace(Regex("'''([^']*?)'''"), "$1")                       // '''粗体''' → 纯文本
-            .replace(Regex("''([^']*?)''"), "$1")                         // ''斜体'' → 纯文本
-            .replace(Regex("""\[\[[^|\]]*?\|([^\]]*?)\]\]"""), "$1")   // [[链接|显示]] → 显示
-            .replace(Regex("""\[\[([^\]]*?)\]\]"""), "$1")              // [[链接]] → 链接
-            .replace(Regex("<[^>]+>"), "")                                // HTML 标签移除
+            .replace(spoiler, "$1")
+            .replace(infoTooltip, "")
+            .replace(lineBreak, "\n")
+            .replace(bold, "$1")
+            .replace(italic, "$1")
+            .replace(labelledLink, "$1")
+            .replace(plainLink, "$1")
+            .replace(htmlTag, "")
             .trim()
     }
 
@@ -423,6 +436,13 @@ object CharacterDetailApi {
         Triple(3, "X", "终极技能"),
         Triple(4, "E", "战术技能")
     )
+
+    private val skillVideoUrl = Regex("url=([^}]+)")
+    private val skillMarker = Regex("""^__SKILL_IMAGE_(\d+)__$""")
+    private val skillValueColor = Regex("""\{\{Color\|[^|}]*\|([^}]*?)\}\}""")
+    private val closedComment = Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL)
+
+    private fun parseVideoUrl(raw: String?): String? = raw?.let { skillVideoUrl.find(it)?.groupValues?.get(1)?.trim() }
 
     private fun parseSkills(
         characterName: String,
@@ -439,14 +459,12 @@ object CharacterDetailApi {
             val result = mutableListOf<SkillInfo>()
             val active = clean(params["主动技能解析"])
             if (active.isNotBlank()) {
-                val videoRaw = params["主动技能视频演示"] ?: ""
-                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
+                val videoUrl = parseVideoUrl(params["主动技能视频演示"])
                 result.add(SkillInfo(slot = "Q", name = "主动技能", description = active, videoUrl = videoUrl))
             }
             val ultimate = clean(params["终极技能解析"])
             if (ultimate.isNotBlank()) {
-                val videoRaw = params["终极技能视频演示"] ?: ""
-                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
+                val videoUrl = parseVideoUrl(params["终极技能视频演示"])
                 result.add(SkillInfo(slot = "X", name = "终极技能", description = ultimate, videoUrl = videoUrl))
             }
             skills = result
@@ -457,20 +475,16 @@ object CharacterDetailApi {
             skills = SKILL_SLOTS.mapNotNull { (num, slot, name) ->
                 val desc = clean(params["技能${num}解析"])
                 if (desc.isBlank()) return@mapNotNull null
-                val videoRaw = params["技能${num}视频演示"] ?: ""
-                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
                 SkillInfo(
                     slot = slot,
                     name = name,
                     description = desc,
-                    videoUrl = videoUrl,
+                    videoUrl = parseVideoUrl(params["技能${num}视频演示"]),
                     valueGroups = parseSkillValueGroups(params["技能${num}数值"])
                 )
             }
-            if (skills.isEmpty() && html != null) {
-                skills = parseRenderedSkillFallback(characterName, html)
-            }
-            if (skills.isNotEmpty() && html != null) {
+            if (html != null) {
+                if (skills.isEmpty()) return parseRenderedSkillFallback(characterName, html)
                 val renderedNames = parseRenderedSkillNames(characterName, html)
                 if (renderedNames.isNotEmpty()) {
                     skills = skills.map { skill ->
@@ -483,8 +497,6 @@ object CharacterDetailApi {
             }
         }
 
-        // 批量获取技能图片 URL：{characterName}技能{N}.png
-        if (skills.isEmpty()) return skills
         return skills
     }
 
@@ -512,18 +524,18 @@ object CharacterDetailApi {
         val headline = document.getElementById("角色技能")
             ?: document.select(".mw-headline").firstOrNull { it.text().trim() == "角色技能" }
             ?: return emptyMap()
-        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val sectionStart = headline.parent()?.takeIf { it.htmlHeadingLevel() != null } ?: headline
         val wrapper = Jsoup.parse("<div id='skill-section-wrapper'></div>")
         val container = wrapper.getElementById("skill-section-wrapper") ?: return emptyMap()
         generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
-            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .takeWhile { it.htmlHeadingLevel() == null }
             .forEach { container.appendChild(it.clone()) }
 
         val ignoredLabels = setOf("技能描述", "技能视频演示", "技能解析", "技能数值")
         val slotLabels = SKILL_SLOTS.map { it.third }.toSet()
-        val markerPattern = Regex("^__SKILL_IMAGE_(\\d+)__$")
+        val imageAltPattern = Regex("""^${Regex.escape(characterName)}技能(\d+)\.(?:png|jpg|jpeg|webp)$""", RegexOption.IGNORE_CASE)
         val chunks = mutableListOf<String>()
-        collectRenderedSkillChunks(container, characterName, chunks)
+        collectRenderedSkillChunks(container, imageAltPattern, chunks)
 
         return SKILL_SLOTS.mapNotNull { (num, slot, _) ->
             val marker = "__SKILL_IMAGE_${num}__"
@@ -531,7 +543,7 @@ object CharacterDetailApi {
             if (start == -1) return@mapNotNull null
             val end = chunks.withIndex()
                 .drop(start + 1)
-                .firstOrNull { markerPattern.matches(it.value) }
+                .firstOrNull { skillMarker.matches(it.value) }
                 ?.index ?: chunks.size
             val block = chunks.subList(start + 1, end)
                 .filterNot { it in ignoredLabels || it in slotLabels }
@@ -544,10 +556,9 @@ object CharacterDetailApi {
 
     private fun collectRenderedSkillChunks(
         element: org.jsoup.nodes.Element,
-        characterName: String,
+        imageAltPattern: Regex,
         chunks: MutableList<String>
     ) {
-        val imageAltPattern = Regex("^${Regex.escape(characterName)}技能(\\d+)\\.(?:png|jpg|jpeg|webp)$", RegexOption.IGNORE_CASE)
         element.childNodes().forEach { node ->
             when (node) {
                 is org.jsoup.nodes.Element -> {
@@ -556,12 +567,12 @@ object CharacterDetailApi {
                             chunks += "__SKILL_IMAGE_${match.groupValues[1]}__"
                         }
                     }
-                    collectRenderedSkillChunks(node, characterName, chunks)
+                    collectRenderedSkillChunks(node, imageAltPattern, chunks)
                 }
 
                 is org.jsoup.nodes.TextNode -> {
                     node.text()
-                        .replace(Regex("\\s+"), " ")
+                        .collapseWikiWhitespace()
                         .trim()
                         .takeIf { it.isNotBlank() }
                         ?.let { chunks += it }
@@ -628,13 +639,19 @@ object CharacterDetailApi {
 
     private fun cleanSkillValue(raw: String): String {
         return clean(raw)
-            .replace(Regex("\\{\\{Color\\|[^|}]*\\|([^}]*?)\\}\\}"), "$1")
-            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(skillValueColor, "$1")
+            .replace(closedComment, "")
             .trim()
     }
 
     /** 弦能增幅网络3 模板中的数值元数据参数，不是属性变化条目，不应出现在界面上。 */
     private val augmentationMetadataKeys = setOf("角色", "模式", "护甲值", "护甲值移动端", "移动速度")
+    private val partTarget = Regex("""^Parts(\d+)Group(\d+)Change$""")
+    private val skillTarget = Regex("""^(.+)Group(\d+)Change$""")
+    private val partChange = Regex("""^Parts(\d+)组(\d+)属性变化$""")
+    private val skillChange = Regex("""^(.+)组(\d+)属性变化$""")
+    private val equivalentModes = Regex("弦能增幅网络((?:【[^】]+】[、，]?)+)完全一致")
+    private val bracketedMode = Regex("【([^】]+)】")
 
     internal fun parseAugmentationModes(wikitext: String, html: String? = null): List<AugmentationMode> {
         val tabsTemplate = extractTemplate(wikitext, "弦能增幅网络Tabs") ?: return emptyList()
@@ -659,8 +676,6 @@ object CharacterDetailApi {
 
     private fun parseRenderedAugmentationLabels(html: String, modeNames: List<String>): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        val partsPattern = Regex("^Parts(\\d+)Group(\\d+)Change$")
-        val groupPattern = Regex("^(.+)Group(\\d+)Change$")
         val sortedModeNames = modeNames.sortedByDescending { it.length }
         Jsoup.parse(html).select(".upgrade-row[data-target]").forEach { row ->
             val target = decodeHtmlTarget(row.attr("data-target"))
@@ -668,9 +683,9 @@ object CharacterDetailApi {
                 .trim()
             val mode = sortedModeNames.firstOrNull { target.startsWith(it) } ?: return@forEach
             val suffix = target.removePrefix(mode)
-            val key = partsPattern.matchEntire(suffix)?.let { match ->
+            val key = partTarget.matchEntire(suffix)?.let { match ->
                 "Parts${match.groupValues[1]}组${match.groupValues[2]}属性变化"
-            } ?: groupPattern.matchEntire(suffix)?.let { match ->
+            } ?: skillTarget.matchEntire(suffix)?.let { match ->
                 "${match.groupValues[1]}组${match.groupValues[2]}属性变化"
             } ?: return@forEach
             val label = row.selectFirst(".upgrade-text")?.let { HtmlText.clean(it.html()) }.orEmpty()
@@ -693,9 +708,8 @@ object CharacterDetailApi {
         if (explicitModes.isEmpty()) return emptyList()
         val existingModes = explicitModes.map { it.mode }.toSet()
         val additions = mutableListOf<AugmentationMode>()
-        val pattern = Regex("弦能增幅网络((?:【[^】]+】[、，]?)+)完全一致")
-        pattern.findAll(wikitext).forEach { match ->
-            val names = Regex("【([^】]+)】")
+        equivalentModes.findAll(wikitext).forEach { match ->
+            val names = bracketedMode
                 .findAll(match.groupValues[1])
                 .map { it.groupValues[1] }
                 .toList()
@@ -711,7 +725,7 @@ object CharacterDetailApi {
         val value = cleanSkillValue(rawValue)
         if (value.isBlank()) return null
 
-        val partsMatch = Regex("^Parts(\\d+)组(\\d+)属性变化$").matchEntire(key)
+        val partsMatch = partChange.matchEntire(key)
         if (partsMatch != null) {
             return AugmentationEntry(
                 group = augmentationPartLabel(partsMatch.groupValues[1]),
@@ -720,7 +734,7 @@ object CharacterDetailApi {
             )
         }
 
-        val skillMatch = Regex("^(.+)组(\\d+)属性变化$").matchEntire(key)
+        val skillMatch = skillChange.matchEntire(key)
         if (skillMatch != null) {
             return AugmentationEntry(
                 group = skillMatch.groupValues[1],
@@ -754,12 +768,15 @@ object CharacterDetailApi {
     private val NAV_CHARA_REGEX = Regex(
         """\{\{NavChara\|([^|]+)\|([^|]+)\|([^|}]+)"""
     )
+    private val characterStoryHeading = Regex("""===\s*角色故事\s*===""")
+    private val relatedStoryHeading = Regex("""===\s*相关剧情\s*===""")
+    private val nextStoryHeading = Regex("""===\s*[^=]+\s*===""")
 
     private fun parseStories(wikitext: String): List<StoryEntry> {
         val entries = mutableListOf<StoryEntry>()
         // 按区域分割
-        val storySection = extractSection(wikitext, "角色故事")
-        val relatedSection = extractSection(wikitext, "相关剧情")
+        val storySection = extractSection(wikitext, characterStoryHeading)
+        val relatedSection = extractSection(wikitext, relatedStoryHeading)
 
         fun parseSection(text: String?, section: String) {
             if (text.isNullOrBlank()) return
@@ -787,11 +804,10 @@ object CharacterDetailApi {
     }
 
     /** 提取 === 标题 === 下的内容，直到下一个 === 或文末 */
-    private fun extractSection(wikitext: String, heading: String): String? {
-        val pattern = Regex("===\\s*" + Regex.escape(heading) + "\\s*===")
-        val match = pattern.find(wikitext) ?: return null
+    private fun extractSection(wikitext: String, heading: Regex): String? {
+        val match = heading.find(wikitext) ?: return null
         val start = match.range.last + 1
-        val nextHeading = Regex("===\\s*[^=]+\\s*===").find(wikitext, start)
+        val nextHeading = nextStoryHeading.find(wikitext, start)
         val end = nextHeading?.range?.first ?: wikitext.length
         return wikitext.substring(start, end)
     }
@@ -985,9 +1001,9 @@ object CharacterDetailApi {
     private fun parseUpdateHistory(html: String): List<UpdateEntry> {
         val document = Jsoup.parse(html)
         val headline = document.getElementById("更新改动历史") ?: return emptyList()
-        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val sectionStart = headline.parent()?.takeIf { it.htmlHeadingLevel() != null } ?: headline
         val sectionElements = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
-            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .takeWhile { it.htmlHeadingLevel() == null }
             .toList()
         if (sectionElements.isEmpty()) return emptyList()
 

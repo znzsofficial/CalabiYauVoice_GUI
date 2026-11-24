@@ -21,8 +21,11 @@ internal data class CharacterSettingsResult(val entries: Map<String, CharacterSe
 internal object CharacterSettingsParser {
     // Verified full names used by the setting page vs short article names. Never prefix-match names.
     private val aliases = mapOf("奥黛丽" to "奥黛丽格罗夫", "玛德蕾娜" to "玛德蕾娜利里", "加拉蒂亚" to "加拉蒂亚利里")
+    private val nameSeparators = Regex("[·・\\s\\u00a0]")
+    private val asciiLetter = Regex("[A-Za-z]")
+
     fun identity(name: String): String {
-        val normalized = name.replace(Regex("[·・\\s\\u00a0]"), "").trim()
+        val normalized = name.replace(nameSeparators, "").trim()
         return aliases[normalized] ?: normalized
     }
 
@@ -44,7 +47,7 @@ internal object CharacterSettingsParser {
                     element.ownText().isNotBlank() -> element.ownText().trim()
                     else -> element.clone().apply {
                         select("small, [lang], .en, .jp, .english, .japanese").remove()
-                    }.text().trim().takeIf { !it.contains(Regex("[A-Za-z]")) }.orEmpty()
+                    }.text().trim().takeUnless(asciiLetter::containsMatchIn).orEmpty()
                 }
             }.orEmpty()
             val name = identity(rawName)

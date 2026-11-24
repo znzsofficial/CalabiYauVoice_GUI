@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -16,11 +18,15 @@ import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,8 +46,14 @@ import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.WikiContentSheet
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
+import com.nekolaska.calabiyau.feature.wiki.game.fieldGuideContent
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_WIDGET_LABEL
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_WIDGET_PAGE
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import util.wikiPathEncode
 
@@ -76,7 +88,8 @@ fun MapDetailScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
+    isActive: () -> Boolean = { true }
 ) {
     val sharedElementKey = remember(source, mapName) {
         if (source == "home") "home-map-image-$mapName" else "list-map-image-$mapName"
@@ -113,6 +126,8 @@ fun MapDetailScreen(
         }
     ) { innerPadding ->
         var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
+        var chapterName by rememberSaveable(mapName) { mutableStateOf<String?>(null) }
+        val chapterStates = rememberSaveableStateHolder()
         val cardShape = mapCardShape()
         Column(
             Modifier
@@ -170,6 +185,17 @@ fun MapDetailScreen(
                 }
             }
 
+            if (mapName == RIFT_MAP) {
+                FilledTonalButton(onClick = { onOpenWikiUrl(extractionArticleUrl(RIFT_WIDGET_PAGE)) },
+                    modifier = Modifier.padding(horizontal = HeaderCardPadding).heightIn(min = 48.dp), shape = AppShapes.compactCard) {
+                    Icon(Icons.Outlined.Map, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(RIFT_WIDGET_LABEL, Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp))
+                }
+            }
+
             // 文字/数据部分由 ApiResourceContent 控制
             ApiResourceContent(
                 state = state,
@@ -181,8 +207,18 @@ fun MapDetailScreen(
             ) { detail ->
                 MapDetailBody(
                     detail = detail ?: return@ApiResourceContent,
+                    onChapter = { if (isActive()) chapterName = it },
                     onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
                 )
+            }
+        }
+
+        if (isActive()) state.data?.chapters?.firstOrNull { it.title == chapterName }?.let { chapter ->
+            chapterStates.SaveableStateProvider(chapter.title) {
+                WikiContentSheet(onDismiss = { if (isActive() && chapterName == chapter.title) chapterName = null }) {
+                    item("title") { Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall) }
+                    fieldGuideContent(chapter, onOpenWikiUrl)
+                }
             }
         }
 
@@ -199,6 +235,7 @@ fun MapDetailScreen(
 @Composable
 private fun MapDetailBody(
     detail: MapDetail,
+    onChapter: (String) -> Unit,
     onPreviewImage: (url: String, title: String) -> Unit
 ) {
     Column(
@@ -232,6 +269,17 @@ private fun MapDetailBody(
 
         // ── 支持模式 + 平台 ──
         MapInfoCard(detail)
+
+        if (detail.chapters.isNotEmpty()) Card(shape = mapCardShape(), colors = mapCardColors(), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SectionTitle(Icons.Outlined.Map, "地图资料")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    detail.chapters.forEach { chapter ->
+                        FilledTonalButton(onClick = { onChapter(chapter.title) }, shape = AppShapes.compactCard) { Text(chapter.title) }
+                    }
+                }
+            }
+        }
 
         // ── 地形图 ──
         if (detail.terrainMapUrl != null) {

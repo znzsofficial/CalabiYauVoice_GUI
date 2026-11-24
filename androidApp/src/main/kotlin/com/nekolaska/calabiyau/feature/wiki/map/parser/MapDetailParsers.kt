@@ -1,35 +1,54 @@
 package com.nekolaska.calabiyau.feature.wiki.map.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
+import com.nekolaska.calabiyau.core.wiki.withoutWikiComments
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
+import com.nekolaska.calabiyau.feature.wiki.game.parser.completeFieldGuide
+import com.nekolaska.calabiyau.feature.wiki.game.parser.parseFieldGuide
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 object MapDetailParsers {
 
-    fun parseMapWikitext(
-        name: String,
-        wikitext: String,
-        html: String
-    ): MapDetail? {
-        val mapContent = extractTemplate(wikitext, "地图") ?: return null
+    private val riftChapters = setOf("概览", "难度与准入", "八大主区域", "楼层结构", "钥匙卡与钥匙房")
+    // Match the whole name; {{地图导航}} and {{地图音乐}} are not {{地图}}.
+    private val mapTemplate = Regex("""\{\{地图(?=[|\s}])""")
+    private val backgroundTemplate = Regex("""\{\{背景(?=[|\s}])""")
+    private val bodyBackground = Regex("""\bbody\s*\{[^}]*\bbackground(?:-image)?\s*:[^}]*\}""", RegexOption.IGNORE_CASE)
+    private val backgroundUrl = Regex("""url\(\s*['"]?(https?://[^\s)'";]+)['"]?\s*\)""")
+
+    fun parseMapWikitext(name: String, wikitext: String, html: String): MapDetail? =
+        readMap(name, wikitext, Jsoup.parse(html))
+
+    internal fun validatedRift(wikitext: String?, html: String?): MapDetail? {
+        if (wikitext.isNullOrBlank() || html.isNullOrBlank()) return null
+        val visible = wikitext.withoutWikiComments()
+        val document = Jsoup.parse(html)
+        return readMap(RIFT_MAP, visible, document)?.takeIf {
+            completeFieldGuide(visible, document, riftChapters, it.chapters)
+        }
+    }
+
+    private fun readMap(name: String, wikitext: String, document: Document): MapDetail? {
+        val mapContent = extractTemplate(wikitext, mapTemplate) ?: return null
         val params = parseTemplateParams(mapContent)
 
-        val document = Jsoup.parse(html)
         val terrainMapUrl = parseTerrainMapUrl(document)
         val galleryUrls = parseGalleryUrls(document)
         val updateHistory = parseUpdateHistoryFromHtml(document)
         // {{背景|地图-...}} is also the detail overview image. Resolve it from the
         // already-rendered background rule, not an extra per-map imageinfo request.
-        val backgroundFile = extractTemplate(wikitext, "背景")?.trim()?.trimStart('|')?.substringBefore('|')?.trim()
+        val backgroundFile = extractTemplate(wikitext, backgroundTemplate)?.trim()?.trimStart('|')?.substringBefore('|')?.trim()
         val overviewImageUrl = backgroundFile?.takeIf { it.isNotBlank() }?.let {
             document.select("style").asSequence()
-                // Android's ICU requires a literal closing brace to be escaped;
-                // the desktop JVM accepts bare '}', masking this in JVM tests.
-                .flatMap { style -> Regex("""\bbody\s*\{[^}]*\bbackground(?:-image)?\s*:[^}]*\}""", RegexOption.IGNORE_CASE).findAll(style.data()) }
-                .flatMap { rule -> Regex("""url\(\s*['"]?(https?://[^\s)'";]+)['"]?\s*\)""").findAll(rule.value) }
+                .flatMap { style -> bodyBackground.findAll(style.data()) }
+                .flatMap { rule -> backgroundUrl.findAll(rule.value) }
                 .map { match -> match.groupValues[1] }
                 .firstOrNull { url -> url.startsWith("https://patchwiki.biligame.com/images/") }
         }
@@ -42,17 +61,15 @@ object MapDetailParsers {
             terrainMapUrl = terrainMapUrl,
             galleryUrls = galleryUrls,
             updateHistory = updateHistory,
-            overviewImageUrl = overviewImageUrl
+            overviewImageUrl = overviewImageUrl,
+            chapters = if (name == RIFT_MAP) parseFieldGuide(document, riftChapters, extractionArticleUrl(name)) else emptyList()
         )
     }
 
-    private fun extractTemplate(wikitext: String, templateName: String): String? {
-        val startMarker = "{{$templateName"
-        // Exact template boundary: {{地图导航}} / {{地图音乐}} are not {{地图}}.
-        val startIdx = Regex("\\{\\{${Regex.escape(templateName)}(?=[|\\s}])").find(wikitext)?.range?.first ?: return null
-
-        var depth = 0
-        var i = startIdx
+    private fun extractTemplate(wikitext: String, opener: Regex): String? {
+        val contentStart = (opener.find(wikitext) ?: return null).range.last + 1
+        var depth = 1
+        var i = contentStart
         while (i < wikitext.length - 1) {
             if (wikitext[i] == '{' && wikitext[i + 1] == '{') {
                 depth++
@@ -60,7 +77,7 @@ object MapDetailParsers {
             } else if (wikitext[i] == '}' && wikitext[i + 1] == '}') {
                 depth--
                 if (depth == 0) {
-                    return wikitext.substring(startIdx + startMarker.length, i).trimStart()
+                    return wikitext.substring(contentStart, i).trimStart()
                 }
                 i += 2
             } else {
@@ -215,7 +232,7 @@ object MapDetailParsers {
         val nodes = mutableListOf<Element>()
         var cursor: Element? = sectionRoot.nextElementSibling()
         while (cursor != null) {
-            if (cursor.tagName().matches(Regex("h[1-6]", RegexOption.IGNORE_CASE))) break
+            if (cursor.htmlHeadingLevel() != null) break
             nodes.add(cursor)
             cursor = cursor.nextElementSibling()
         }

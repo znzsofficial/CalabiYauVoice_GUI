@@ -40,6 +40,9 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAG
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
 import com.nekolaska.calabiyau.feature.wiki.extraction.source.ExtractionCatalogRemoteSource
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_WIDGET_LABEL
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_WIDGET_PAGE
 
 internal val extractionEquipmentLinks = listOf(
     ExtractionCatalogKind.LOOT.let { TopicLink(it.title, it.pageName, WikiRoute.ExtractionCatalog(it)) },
@@ -50,6 +53,8 @@ internal val extractionEquipmentLinks = listOf(
 
 internal val extractionGuideLinks = listOf(
     TopicLink("模式介绍", EXTRACTION_MODE_PAGE, WikiRoute.ExtractionMode),
+    TopicLink("维里昂裂隙资料", RIFT_MAP, WikiRoute.MapDetail(RIFT_MAP, null)),
+    TopicLink(RIFT_WIDGET_LABEL, RIFT_WIDGET_PAGE, null),
     TopicLink("工坊", "$EXTRACTION_MODE_PAGE/工坊", WikiRoute.ExtractionWorkshop),
     TopicLink("掉落表格", ExtractionCatalogRemoteSource.CONTAINERS_PAGE, null)
 )
@@ -488,7 +493,7 @@ private fun TopicDirectoryRow(link: TopicLink, open: () -> Unit) {
             border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.50f))
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(topicIcon(link.route), null, Modifier.size(18.dp), tint = colors.primary)
+                Icon(if (link.article == RIFT_WIDGET_PAGE) Icons.Outlined.Map else topicIcon(link.route), null, Modifier.size(18.dp), tint = colors.primary)
             }
         }
         if (isWeb) {
@@ -574,6 +579,7 @@ private fun topicIcon(route: WikiRoute?): ImageVector = when (route) {
     WikiRoute.ExtractionGuns -> Icons.Outlined.GpsFixed
     WikiRoute.ExtractionArmor -> Icons.Outlined.Shield
     WikiRoute.ExtractionMode -> Icons.Outlined.Explore
+    is WikiRoute.MapDetail -> Icons.Outlined.Map
     WikiRoute.ExtractionWorkshop -> Icons.Outlined.BuildCircle
     is WikiRoute.ExtractionCatalog -> if (route.kind == ExtractionCatalogKind.ATTACHMENTS) Icons.Outlined.Tune else Icons.Outlined.Inventory2
     else -> Icons.AutoMirrored.Outlined.Article

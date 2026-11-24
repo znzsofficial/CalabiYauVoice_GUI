@@ -6,14 +6,35 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.equipment.model.*
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import java.math.BigDecimal
 
 internal class EquipmentFormatException(detail: String) : IllegalArgumentException(detail)
 
 internal object EquipmentParser {
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
+    private val catalogCountPrefix = EquipmentKind.entries.associateWith { Regex("""^共\s*(\d+)\s*${it.countUnit}""") }
     private val statLine = Regex("""^(\S+)\s+(.+)$""")
     private val magazineSize = Regex("""\d+\s*发""")
     private val gridSize = Regex("""\d+\s*×\s*\d+""")
+    private val exactMoney = Regex("""(?:\d+|\d{1,3}(?:,\d{3})+)""")
+    private val compactMoney = Regex("""(\d+(?:\.\d)?)([万亿])""")
+
+    // Compare against the precision used by the Wiki renderer, not the number of digits left
+    // after it strips a trailing .0. Never derive a sort value from the rounded caption.
+    private fun matchesMoney(caption: String, raw: Long): Boolean {
+        if (raw < 0) return false
+        if (exactMoney.matches(caption)) return caption.replace(",", "").toLongOrNull() == raw
+        val (amount, unit) = compactMoney.matchEntire(caption)?.destructured ?: return false
+        val places = when {
+            raw >= 100_000_000 && unit == "亿" -> 8
+            raw in 10_000L until 100_000_000L && unit == "万" -> 4
+            else -> return false
+        }
+        val rounded = amount.toBigDecimal().movePointRight(places)
+        if (places == 4 && raw >= 1_000_000) return amount.toLongOrNull() == (raw + 5_000) / 10_000
+        val halfStep = BigDecimal.valueOf(if (places == 4) 500L else 5_000_000L)
+        return (rounded - BigDecimal.valueOf(raw)).abs() <= halfStep
+    }
 
     private fun invalid(reason: String): Nothing = throw EquipmentFormatException(reason)
     private fun ensure(condition: Boolean, reason: String) { if (!condition) invalid(reason) }
@@ -33,7 +54,7 @@ internal object EquipmentParser {
         ensure(gallery.hasClass(kind.gallery) && EquipmentKind.entries.none { it != kind && gallery.hasClass(it.gallery) }, "图鉴类型不符")
         // Jsoup can otherwise repair and accept a string cut inside the final card.
         ensure(gallery.endSourceRange().isTracked && !gallery.endSourceRange().isImplicit, "图鉴截断")
-        val count = Regex("""^共\s*(\d+)\s*${kind.countUnit}""").find(gallery.previousElementSibling()?.text().orEmpty())
+        val count = catalogCountPrefix.getValue(kind).find(gallery.previousElementSibling()?.text().orEmpty())
             ?.groupValues?.get(1)?.toIntOrNull() ?: invalid("缺少${kind.title}总数")
         val cards = gallery.children().filter { it.hasClass("sec-card") }
         ensure(count > 0 && count == cards.size && count == doc.select(".sec-card").size &&
@@ -85,7 +106,7 @@ internal object EquipmentParser {
         ensure(card.attr("data-param2") == code.toString() && qTag.attr("data-q") == code.toString() && qTag.text() == quality.name, "$id 品质不符")
         val value = card.only(".sec-card-value").text().substringAfter("价值 ", "").present("$id 缺少价值")
         val numericValue = card.attr("data-sort-value").toLongOrNull() ?: invalid("$id 价值异常")
-        ensure(value.replace(",", "").toLongOrNull() == numericValue, "$id 价值不符")
+        ensure(matchesMoney(value, numericValue), "$id 价值不符")
         val weight = card.attr("data-sort-weight").number("$id 缺少重量")
         val time = card.attr("data-sort-time").number("$id 缺少搜刮时间")
         val rate = card.attr("data-sort-rate").number("$id 缺少出现率").toDouble()

@@ -4,12 +4,13 @@ import java.math.BigDecimal
 
 enum class DropCountState { POSITIVE, ZERO, UNKNOWN }
 
+private val dropCountProbability = Regex("""(\d+)\s*件\s*(\d+(?:\.\d+)?)%""")
+
 /** Validate the entire distribution before using it to exclude a source. No derived item rates. */
 internal fun dropCountState(text: String): DropCountState {
     val parts = text.trim().split('、')
-    val pattern = Regex("""(\d+)\s*件\s*(\d+(?:\.\d+)?)%""")
     val values = parts.map { part ->
-        val match = pattern.matchEntire(part.trim()) ?: return DropCountState.UNKNOWN
+        val match = dropCountProbability.matchEntire(part.trim()) ?: return DropCountState.UNKNOWN
         val count = match.groupValues[1].toIntOrNull() ?: return DropCountState.UNKNOWN
         val probability = match.groupValues[2].toBigDecimalOrNull() ?: return DropCountState.UNKNOWN
         if (probability > BigDecimal.valueOf(100)) return DropCountState.UNKNOWN

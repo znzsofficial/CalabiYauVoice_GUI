@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.story.parser
 
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import com.nekolaska.calabiyau.feature.wiki.story.model.StoryEntry
 import com.nekolaska.calabiyau.feature.wiki.story.model.StorySection
 import org.jsoup.Jsoup
@@ -40,7 +41,7 @@ object StoryParsers {
 
         rootChildren.forEach { element ->
             when {
-                element.tagName().matches(Regex("h[1-6]")) -> {
+                element.htmlHeadingLevel() != null -> {
                     flush()
                     val title = element.selectFirst("span.mw-headline")?.text()?.trim().orEmpty()
                     val level = element.tagName().drop(1).toIntOrNull() ?: 2

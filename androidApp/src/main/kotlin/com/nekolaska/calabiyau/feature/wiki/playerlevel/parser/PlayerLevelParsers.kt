@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.playerlevel.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PLAYER_LEVEL_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelEntry
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelPage
@@ -12,6 +13,12 @@ import org.jsoup.nodes.Element
 import util.wikiPathEncode
 
 object PlayerLevelParsers {
+    private val levelHeader = Regex("""^!\s*(\d+)\s*$""")
+    private val experienceCell = Regex("""^\|\s*([0-9,]+)\s*$""")
+    private val fileTitle = Regex("""\[\[(?:文件|File):([^|\]]+)""")
+    private val experienceHeading = Regex("""(?m)^==\s*等级经验值\s*==\s*$""")
+    private val rewardsHeading = Regex("""(?m)^==\s*等级奖励\s*==\s*$""")
+    private val categoryStart = Regex("""(?m)^\[\[分类:""")
 
     fun parseHtml(html: String, wikitext: String? = null): PlayerLevelPage {
         val document = Jsoup.parse(html)
@@ -33,7 +40,7 @@ object PlayerLevelParsers {
     }
 
     private fun parseWikitextLevels(wikitext: String): List<PlayerLevelEntry> {
-        val section = extractSection(wikitext, "等级经验值", "等级奖励")
+        val section = experienceSection(wikitext)
         if (section.isBlank()) return emptyList()
 
         var currentFrameName: String? = null
@@ -42,10 +49,10 @@ object PlayerLevelParsers {
         var index = 0
         while (index < lines.size) {
             val line = lines[index]
-            val level = Regex("^!\\s*(\\d+)\\s*$").find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            val level = levelHeader.matchEntire(line)?.groupValues?.get(1)?.toIntOrNull()
             if (level != null && level in 1..500) {
                 val exp = lines.getOrNull(index + 1)
-                    ?.let { Regex("^\\|\\s*([0-9,]+)\\s*$").find(it)?.groupValues?.getOrNull(1) }
+                    ?.let { experienceCell.matchEntire(it)?.groupValues?.get(1) }
                     ?.replace(",", "")
                     ?.toIntOrNull()
                 val imageLine = lines.getOrNull(index + 2).orEmpty()
@@ -63,19 +70,17 @@ object PlayerLevelParsers {
     }
 
     private fun extractFileName(line: String): String? {
-        return Regex("\\[\\[(?:文件|File):([^|\\]]+)").find(line)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
+        return fileTitle.find(line)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
     }
 
     private fun String.toWikiFileRedirectUrl(): String {
         return "https://wiki.biligame.com/klbq/Special:Redirect/file/${wikiPathEncode()}"
     }
 
-    private fun extractSection(wikitext: String, title: String, nextTitle: String?): String {
-        val startMatch = Regex("(?m)^==\\s*${Regex.escape(title)}\\s*==\\s*$").find(wikitext) ?: return ""
+    private fun experienceSection(wikitext: String): String {
+        val startMatch = experienceHeading.find(wikitext) ?: return ""
         val afterStart = startMatch.range.last + 1
-        val end = nextTitle?.let { next ->
-            Regex("(?m)^==\\s*${Regex.escape(next)}\\s*==\\s*$").find(wikitext, afterStart)?.range?.first
-        } ?: Regex("(?m)^\\[\\[分类:").find(wikitext, afterStart)?.range?.first
+        val end = (rewardsHeading.find(wikitext, afterStart) ?: categoryStart.find(wikitext, afterStart))?.range?.first
         return wikitext.substring(afterStart, end ?: wikitext.length)
     }
 
@@ -176,6 +181,6 @@ object PlayerLevelParsers {
     private fun Element.cleanText(): String {
         val copy = clone()
         copy.select("style,script,.mw-editsection").remove()
-        return copy.text().replace(Regex("\\s+"), " ").trim()
+        return copy.text().collapseWikiWhitespace().trim()
     }
 }

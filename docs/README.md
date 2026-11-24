@@ -4,7 +4,7 @@
 
 - **安装或从源码运行**：[Android 下载站](https://wiki.nekolaska.vip/) · [中文构建说明](../README_ZH_CN.md#-构建与运行) · [English build instructions](../README.md#-build-and-run)。Windows 桌面端可从源码运行，本次发布只分发 Android APK。
 - **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；改界面视觉与组件样式先读 [Android 视觉设计规范](android-ui-design-guide.md)；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
-- **从 2.3.0 接续**：[发版后交接](handoffs/2026-11-22-2.3.0.md)列出已定设计、已结案调查和真机待验事项；更新日志、签名 APK 和主站核验见[发布记录](releases/2.3.0.md)。
+- **从 2.3.1 接续**：先看[本版发布记录](releases/2.3.1.md)，再按需查[活动与旧缓存](android-wiki-ui-architecture.md#活动详情)、[弦溯掉落与玩法](extraction-mode-implementation.md)、[设备待验](device-acceptance.md)。首页视觉等已定设计保留在[2.3.0 交接](handoffs/2026-11-22-2.3.0.md)。
 - **排查线上问题**：Wiki 登录或投票看[账号会话](android-webview-auth.md#cookie-会话边界)，图鉴读不到数据看[快照索引](live-wiki-tests.md)，后台数字看[统计口径](app-usage.md#面板与口径)。
 - **验证与发版**：[设备验收清单](device-acceptance.md)记录仍需实机操作的项目；[发布清单](release-version-checklist.md)列出签名、迁移和主站核验顺序。
 
@@ -27,11 +27,12 @@
 - [新人入坑指南](beginner-guide.md)：玩法入门、版本与下载、装备及设置建议、常见问题。
 - [PC 游戏设置](pc-game-settings.md)：设置、推荐和参考表的语义边界。
 - [弦化、角色定位与增幅网络](native-mechanics-pages.md)：三页原生阅读和完整导航分流。
-- [弦溯战线](extraction-mode-implementation.md)：专题入口、掉落反查、物资与配件、弦溯专属装备和工坊。
+- [弦溯战线](extraction-mode-implementation.md)：专题入口、单件抽中率与候选容器、弦溯装备、工坊及玩法资料。
 - [裂隙与生化卡池](rift-bio-pool-followup.md)：地图、双卡表、正式分享索引。
 
 ### 图鉴与资料
 
+- [活动与往期奖励](android-wiki-ui-architecture.md#活动详情)：原生阅读、奖励目录、原文章节及旧版活动缓存。
 - [角色详情](character-detail-presentation.md)：技能、设定、关系和呈现规则。
 - [武器解析](weapon-parsing-audit.md)：详情数据来源、图片文件名回退、伏闪时间轴及模式增幅。
 - [玩家装饰](player-decoration-catalogs.md)：Lua 双表/HTML 主源、获取方式、缺图和预览。
@@ -50,7 +51,7 @@
 
 ## 发布记录
 
-当前发布：[Android 2.3.0（67）](releases/2.3.0.md)，2026-11-22。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+当前发布：[Android 2.3.1（68）](releases/2.3.1.md)，2026-11-24。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 
 ## 归档与维护口径
 

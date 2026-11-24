@@ -9,6 +9,7 @@ internal object ExtractionDropTableParser {
     private val qualityShares = listOf("Q5臻藏", "Q4完美", "Q3卓越", "Q2及以下")
     private val distributionHeaders = setOf("阶段", "阈值", "件数概率") + qualityShares
     private val percentage = Regex("""(\d+(?:\.(\d+))?)%""")
+    private val legacyPoolItems = Regex("""^\d+\s*项[：:](.*)$""", RegexOption.DOT_MATCHES_ALL)
 
     fun parse(table: Element, issues: MutableList<String>): List<ExtractionEntry> {
         val ownRows = table.select("tr").filter { it.closest("table") === table }
@@ -161,7 +162,7 @@ internal object ExtractionDropTableParser {
     }
 
     private fun parseLegacy(value: String): List<ExtractionDropPoolGroup> {
-        val items = Regex("""^\d+\s*项[：:](.*)$""", RegexOption.DOT_MATCHES_ALL).matchEntire(value.trim())
+        val items = legacyPoolItems.matchEntire(value.trim())
             ?.groupValues?.get(1)?.split('、')?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
         return if (items.isEmpty()) emptyList() else listOf(ExtractionDropPoolGroup("全部掉落物", items))
     }

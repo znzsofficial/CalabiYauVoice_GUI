@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.imprint.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import com.nekolaska.calabiyau.feature.wiki.imprint.model.ImprintItem
 import com.nekolaska.calabiyau.feature.wiki.imprint.model.ImprintPage
 import com.nekolaska.calabiyau.feature.wiki.imprint.model.ImprintSection
@@ -8,6 +9,10 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 object ImprintParsers {
+    private val quotedName = Regex("【([^】]+)】")
+    private val leadingColon = Regex("""^\s*[:：]\s*""")
+    private val iconLevel = Regex("""335\d+([1-4])""")
+    private val namedLevel = Regex("""等级\s*([1-4])""")
 
     private const val WIKI_URL = "https://wiki.biligame.com/klbq/%E5%8D%B0%E8%BF%B9"
     private val levels = listOf("等级1印迹", "等级2印迹", "等级3印迹", "等级4印迹")
@@ -47,9 +52,9 @@ object ImprintParsers {
             if (text.isBlank() || levels.any { text == it }) return@mapNotNull null
             val name = item.selectFirst("b, strong")?.cleanText().orEmpty()
             if (name.isBlank()) return@mapNotNull null
-            val quote = Regex("【([^】]+)】").find(text)?.groupValues?.getOrNull(1).orEmpty()
+            val quote = quotedName.find(text)?.groupValues?.get(1).orEmpty()
             val obtainMethod = text.substringAfter("获得方式：", "")
-                .replace(Regex("^\\s*[:：]\\s*"), "")
+                .replace(leadingColon, "")
                 .trim()
             ImprintItem(
                 name = name,
@@ -64,17 +69,17 @@ object ImprintParsers {
     private fun parseLevelFromImage(element: Element): Int? {
         val src = element.selectFirst("img")?.attr("alt").orEmpty()
             .ifBlank { element.selectFirst("img")?.attr("src").orEmpty() }
-        return Regex("335\\d+([1-4])").find(src)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return iconLevel.find(src)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     private fun parseLevelFromName(name: String): Int? {
-        return Regex("等级\\s*([1-4])").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return namedLevel.find(name)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     private fun Element.cleanText(): String {
         val copy = clone()
         copy.select("style,script,.mw-editsection").remove()
-        return copy.text().replace(Regex("\\s+"), " ").trim()
+        return copy.text().collapseWikiWhitespace().trim()
     }
 
     private fun Element.firstImageUrl(): String? {

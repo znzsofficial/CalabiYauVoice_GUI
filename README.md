@@ -56,9 +56,9 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ### 📱 Android Extras
 
-- **🏠 Wiki Home** — Search the Wiki, open the full directory, or jump to balance stats and the weapon list. Switch between character and map previews without losing either filter or scroll position. Costumes, decorations, and voting have native pages; full announcements, event articles, and stories open in the built-in Wiki browser.
+- **🏠 Wiki Home** — Search the Wiki, open the full directory, or jump to balance stats and the weapon list. Switch between character and map previews without losing either filter or scroll position. Open an event to read its rules, tasks and rewards in the app; music and interactive story sections link to the original Wiki page.
 - **🎛️ Six home shortcuts** — Open **Edit** on the home page or **Home shortcuts** in Settings. Search for an entry, replace or reorder shortcuts, and choose a grid or button layout. Changes take effect when you save. [Home and settings navigation](docs/android-navigation-followup.md)
-- **🧭 Extraction mode (弦溯战线)** — Open the hub from Wiki Home to look up drops by item or source, browse supplies and attachments, compare firearm and armor quality tiers, or find workshop recipes by ingredient. The full drop table opens in the Wiki browser. [Extraction guide](docs/extraction-mode-implementation.md)
+- **🧭 Extraction mode (弦溯战线)** — Choose an item and quality to compare per-draw drop rates across sources, or browse a container’s candidate items. Compare equipment tiers, find workshop recipes by ingredient, read the mode guide, or open the Wiki creator’s interactive Rift map. [Extraction guide](docs/extraction-mode-implementation.md)
 - **📖 Guides** — Native PC game settings, beginner guide, Stringification, character roles, and augmentation network pages with section navigation and offline reading.
 - **🖼️ Gallery** — Browse wallpapers, stickers, and comics in a native image gallery with section filtering and fullscreen preview.
 - **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, and file download/upload support.

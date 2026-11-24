@@ -8,8 +8,9 @@ class DropArtworkIndex internal constructor(private val imagesByQuality: Map<Str
 
     internal fun firstImageIn(group: ExtractionDropPoolGroup): Pair<ExtractionDropItem, String>? {
         val images = imagesByQuality[artworkQuality(group.label)] ?: return null
-        for (name in group.items) images[name.trim()]?.let { return ExtractionDropItem(name, group.label, group.qualityCode) to it }
-        return null
+        return group.items.firstNotNullOfOrNull { name ->
+            images[name.trim()]?.let { url -> ExtractionDropItem(name, group.label, group.qualityCode) to url }
+        }
     }
 
     companion object {
@@ -60,11 +61,14 @@ fun buildDropArtworkIndex(entries: List<ExtractionEntry>): DropArtworkIndex {
             }
         }
     }.filter { it.name.isNotBlank() }
-    val qualitiesByName = candidates.groupBy { it.name }.mapValues { (_, rows) -> rows.map { it.quality }.toSet() }
+    val byNameAndQuality = candidates.groupBy { it.name to it.quality }
+    val namesWithQuality = buildSet {
+        for ((name, quality) in byNameAndQuality.keys) if (quality.isNotEmpty()) add(name)
+    }
     val images = mutableMapOf<String, MutableMap<String, String>>()
-    candidates.groupBy { it.name to it.quality }.forEach { (key, rows) ->
+    byNameAndQuality.forEach { (key, rows) ->
         // Never guess the quality of an unqualified inline image, even if only one URL is known.
-        if (key.second.isBlank() && qualitiesByName[key.first] != setOf("")) return@forEach
+        if (key.second.isBlank() && key.first in namesWithQuality) return@forEach
         if (rows.mapNotNull { it.itemId }.distinct().size > 1) return@forEach
         val urls = rows.mapNotNull { it.image?.trim()?.takeIf { url -> url.startsWith("https://") || url.startsWith("http://") } }.distinct()
         urls.singleOrNull()?.let { images.getOrPut(key.second) { mutableMapOf() }[key.first] = it }

@@ -4,6 +4,8 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
+import com.nekolaska.calabiyau.core.wiki.withoutWikiComments
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.TacticalItemEffectParser
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponPublishedSections
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponSupplementaryDataParser
@@ -37,12 +39,6 @@ object WeaponDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private val reader = WeaponDetailReader(::load)
-    private val wikiComment = Regex("""<!--.*?(?:-->|\z)""", RegexOption.DOT_MATCHES_ALL)
-
-    // The Wiki may leave whole unpublished templates in comments. Strip them before looking at
-    // any template (including artwork and cooldown lookup), without parsing wikitext as HTML.
-    private fun visibleWikitext(text: String): String =
-        if ("<!--" in text) text.replace(wikiComment, "") else text
 
     internal fun validDetailPayload(name: String, payload: String) = WikiParseSource.validDetail(payload) { text, html ->
         parseWeaponWikitext(name, text, renderedHtml = html) != null
@@ -136,7 +132,7 @@ object WeaponDetailApi {
                         kind = ErrorKind.PARSE
                     )
                 val wikitext = parseObj["wikitext"]?.jsonObject?.get("*")
-                    ?.jsonPrimitive?.content?.let(::visibleWikitext)
+                    ?.jsonPrimitive?.content?.withoutWikiComments()
                     ?: return@withContext ApiResult.Error(
                         "无法获取页面内容",
                         kind = ErrorKind.PARSE
@@ -188,7 +184,7 @@ object WeaponDetailApi {
         isTactical: Boolean = false,
         renderedHtml: String = "",
         resolvedImageUrl: String? = null
-    ): WeaponDetail? = parseVisibleWeaponWikitext(name, visibleWikitext(wikitext), isTactical, renderedHtml, resolvedImageUrl)
+    ): WeaponDetail? = parseVisibleWeaponWikitext(name, wikitext.withoutWikiComments(), isTactical, renderedHtml, resolvedImageUrl)
 
     private fun parseVisibleWeaponWikitext(
         name: String,
@@ -327,13 +323,7 @@ object WeaponDetailApi {
 
         // 清理 description 中的 wiki 标记
         val rawDesc = weaponParams["介绍"] ?: weaponParams["武器介绍"] ?: ""
-        val cleanDesc = rawDesc
-            .replace(Regex("""\{\{黑幕\|([^}]*)\}\}"""), "$1")  // {{黑幕|text}} → text
-            .replace(Regex("""\{\{#info:[^}]*\}\}"""), "")           // {{#info:...}}
-            .replace(Regex("""<br\s*/?>\s*"""), "\n")                  // <br /> → 换行
-            .replace(Regex("""<[^>]+>"""), "")                            // 其他 HTML 标签
-            .replace(Regex("""\n{3,}"""), "\n\n")                       // 多余空行
-            .trim()
+        val cleanDesc = cleanDescription(rawDesc)
 
         val cooldowns = if (isTacticalEquipment) parseCooldownTable(renderedHtml, name) else emptyMap()
         val itemEffect = if (isTacticalEquipment) {
@@ -401,6 +391,20 @@ object WeaponDetailApi {
         )
     }
 
+    private val spoiler = Regex("""\{\{黑幕\|([^}]*)\}\}""")
+    private val infoTooltip = Regex("""\{\{#info:[^}]*\}\}""")
+    private val lineBreak = Regex("""<br\s*/?>\s*""")
+    private val htmlTag = Regex("<[^>]+>")
+    private val extraLineBreaks = Regex("""\n{3,}""")
+
+    private fun cleanDescription(raw: String): String = raw
+        .replace(spoiler, "$1")
+        .replace(infoTooltip, "")
+        .replace(lineBreak, "\n")
+        .replace(htmlTag, "")
+        .replace(extraLineBreaks, "\n\n")
+        .trim()
+
     private suspend fun resolveWeaponImageUrl(
         weaponName: String,
         wikitext: String,
@@ -442,6 +446,7 @@ object WeaponDetailApi {
 
     /** Wiki 将"武器伤害"章节改名为"武器详细数据"，两个标题都要能定位。 */
     private val damageSectionHeadings = setOf("武器伤害", "武器详细数据")
+    private val distanceLabel = Regex("""\d+米""")
 
     private fun parseWeaponDamageFromHtml(html: String): List<DamageRow> {
         if (html.isBlank()) return emptyList()
@@ -449,9 +454,9 @@ object WeaponDetailApi {
         val headline = damageSectionHeadings.firstNotNullOfOrNull { document.getElementById(it) }
             ?: document.select("span.mw-headline").firstOrNull { it.text().trim() in damageSectionHeadings }?.parent()
             ?: return emptyList()
-        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val sectionStart = headline.parent()?.takeIf { it.htmlHeadingLevel() != null } ?: headline
         val sectionElements = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
-            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .takeWhile { it.htmlHeadingLevel() == null }
             .toList()
 
         return sectionElements.flatMap { element ->
@@ -521,12 +526,12 @@ object WeaponDetailApi {
         // 转置表（重焰等）：首行为距离列（10米/15米/20米），后续行首为部位名。
         // wiki 源码用 "|  | 10米 || 15米" 语法，距离列渲染为 td 而非 th
         val transposedHeader = rows.firstOrNull()?.select("> th, > td") ?: emptyList()
-        if (transposedHeader.count { it.text().trim().matches(Regex("\\d+米")) } >= 2) {
+        if (transposedHeader.count { distanceLabel.matches(it.text().trim()) } >= 2) {
             return parseTransposedDamageTable(table)
         }
 
         val hasDistanceHeader = rows.any { row ->
-            row.select("th").any { cell -> cell.text().trim().matches(Regex("\\d+米")) }
+            row.select("th").any { cell -> distanceLabel.matches(cell.text().trim()) }
         }
 
         return if (hasDistanceHeader) {
@@ -552,7 +557,7 @@ object WeaponDetailApi {
         val distances = (rows.firstOrNull() ?: return emptyList())
             .select("> th, > td")
             .map { it.text().trim() }
-            .filter { it.matches(Regex("\\d+米")) }
+            .filter(distanceLabel::matches)
         if (distances.isEmpty()) return emptyList()
 
         val valuesByPart = mutableMapOf<String, List<String>>()
@@ -592,7 +597,7 @@ object WeaponDetailApi {
         return table.select("tr").mapNotNull { row ->
             val header = row.selectFirst("th")?.text()?.trim().orEmpty()
             val valueCells = row.select("td")
-            if (!header.matches(Regex("\\d+米")) || valueCells.isEmpty()) return@mapNotNull null
+            if (!distanceLabel.matches(header) || valueCells.isEmpty()) return@mapNotNull null
 
             if (valueCells.size == 1) {
                 // 移动端单值表（重焰等）：| 10米 | 85 —— 全弹丸总伤

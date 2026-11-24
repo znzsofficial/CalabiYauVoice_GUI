@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.history.parser
 
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import com.nekolaska.calabiyau.feature.wiki.history.model.GameHistoryEntry
 import com.nekolaska.calabiyau.feature.wiki.history.model.GameHistorySection
 import org.jsoup.Jsoup
@@ -40,7 +41,7 @@ object GameHistoryParsers {
 
         rootChildren.forEach { element ->
             when {
-                element.tagName().matches(Regex("h[1-6]")) -> {
+                element.htmlHeadingLevel() != null -> {
                     flush()
                     val title = element.selectFirst("span.mw-headline")?.text()?.trim().orEmpty()
                     val level = element.tagName().drop(1).toIntOrNull() ?: 2

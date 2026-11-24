@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.weapon.list
 import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -285,7 +286,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         val document = Jsoup.parseBodyFragment(raw)
         document.select(".smwttcontent, .smwtticon").remove()
         return document.body().text()
-            .replace(Regex("\\s+"), " ")
+            .collapseWikiWhitespace()
             .trim()
     }
 

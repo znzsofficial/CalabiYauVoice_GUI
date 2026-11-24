@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction.workshop.parser
 
+import com.nekolaska.calabiyau.core.wiki.withoutWikiComments
 import com.nekolaska.calabiyau.feature.wiki.extraction.workshop.model.*
 
 /** The API returns rendered HTML and its own source in ONE revision. The generated calls provide
@@ -39,7 +40,7 @@ internal fun checkWorkshopDeclarations(wikitext: String, page: WorkshopPage) {
         return Declaration(type, "", "", name, badge = !params["徽章"].isNullOrBlank(),
             subtitle = !params["信息行"].isNullOrBlank(), detail = !params["详情"].isNullOrBlank())
     }
-    val published = wikitext.replace(Regex("<!--.*?(?:-->|$)", RegexOption.DOT_MATCHES_ALL), "")
+    val published = wikitext.withoutWikiComments()
     for (raw in published.lineSequence()) {
         val line = raw.trim()
         if (template != null) {

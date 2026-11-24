@@ -759,5 +759,7 @@ private fun uniqueOutputFile(outDir: File, fileName: String): File {
     return candidate
 }
 
+private val unsafePathSegmentCharRegex = Regex("[^A-Za-z0-9._-]")
+
 private fun safePathSegment(name: String): String =
-    name.ifBlank { "file" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
+    name.ifBlank { "file" }.replace(unsafePathSegmentCharRegex, "_")

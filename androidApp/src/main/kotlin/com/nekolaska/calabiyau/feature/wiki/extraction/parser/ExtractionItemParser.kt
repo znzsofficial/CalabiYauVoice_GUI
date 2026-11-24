@@ -5,6 +5,8 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 import org.jsoup.nodes.Element
 
 internal object ExtractionItemParser {
+    private val gridSize = Regex("""\d+\s*[×xX]\s*\d+""")
+
     fun parse(card: Element, prefix: String, qualities: Map<Int, String>): ExtractionEntry? {
         val name = card.selectFirst(".$prefix-name")?.text()?.trim().orEmpty()
         if (name.isBlank()) return null
@@ -25,7 +27,7 @@ internal object ExtractionItemParser {
                         text.startsWith("售价") -> "售价"
                         text.startsWith("搜刮") -> "搜刮耗时"
                         text.startsWith("可叠") -> "叠加上限"
-                        text.matches(Regex("\\d+\\s*[×xX]\\s*\\d+")) -> "占格"
+                        gridSize.matches(text) -> "占格"
                         else -> "属性"
                     }
                     val value = if (label in setOf("重量", "售价")) text.removePrefix(label).trim()

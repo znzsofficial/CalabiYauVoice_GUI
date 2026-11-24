@@ -583,6 +583,7 @@ fun WikiHubScreen(
                     source = route.source,
                     onBack = { popBackStack() },
                     onOpenWikiUrl = ::openCurrentWiki,
+                    isActive = ::isPageInteractive,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
@@ -618,8 +619,9 @@ fun WikiHubScreen(
 
             is WikiRoute.Activities -> {
                 ActivityScreen(
-                    onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onBack = ::popBackStack,
+                    onOpenWikiUrl = ::openCurrentWiki,
+                    isActive = ::isPageInteractive
                 )
             }
 
@@ -635,7 +637,8 @@ fun WikiHubScreen(
                     focusedMode = if (route == WikiRoute.ExtractionMode) GameModeApi.EXTRACTION_MODE else null,
                     onBack = { popBackStack() },
                     onOpenWikiUrl = ::openCurrentWiki,
-                    onOpenMapDetail = { name, imageUrl -> navigateToMapDetail(name, imageUrl) }
+                    onOpenMapDetail = { name, imageUrl -> navigateToMapDetail(name, imageUrl) },
+                    onOpenExtractionMode = { if (isPageInteractive()) navigateTo(WikiRoute.ExtractionMode) }
                 )
             }
 

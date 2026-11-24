@@ -79,6 +79,11 @@ private data class ParsedTimeline(val clips: List<TimelineClip>, val truncated: 
 
 private const val MIN_CLIP_MS = 100L
 private const val MAX_CLIPS = 8000
+private val timelineShiftInputRegex = Regex("-?\\d*")
+private val lrcTimestampRegex = Regex("\\[(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,3}))?]")
+private val srtTimestampRegex = Regex("(\\d+):(\\d{2}):(\\d{2})[,.](\\d{1,3})")
+private val assTimestampRegex = Regex("(\\d+):(\\d{2}):(\\d{2})[.](\\d{1,2})")
+
 private suspend inline fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> {
     return try {
         Result.success(block())
@@ -415,7 +420,7 @@ private fun TextToolsTab(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
                 Button(onClick = { chooseFiles(setOf("srt", "lrc", "vtt", "ass", "ssa"), multi = false)?.firstOrNull()?.let(::importTimeline) }, disabled = isBusy) { Text("导入字幕/时间轴") }
                 ComboBox(header = "导出格式", items = TimelineExportFormat.entries.map { it.label }, selected = format.ordinal, onSelectionChange = { i, _ -> format = TimelineExportFormat.entries[i] })
-                TextField(value = shiftMs, onValueChange = { if (it.matches(Regex("-?\\d*"))) shiftMs = it }, header = { Text("整体偏移 ms", fontSize = 12.sp) }, modifier = Modifier.width(140.dp), singleLine = true)
+                TextField(value = shiftMs, onValueChange = { if (timelineShiftInputRegex.matches(it)) shiftMs = it }, header = { Text("整体偏移 ms", fontSize = 12.sp) }, modifier = Modifier.width(140.dp), singleLine = true)
                 Spacer(Modifier.weight(1f))
                 Button(onClick = ::exportTimeline, disabled = isBusy || clips.isEmpty()) { Text("导出") }
             }
@@ -874,11 +879,10 @@ private fun parseSrtStream(reader: BufferedReader): Pair<List<TimelineClip>, Boo
 
 private fun parseLrcStream(reader: BufferedReader): Pair<List<TimelineClip>, Boolean> {
     val entries = mutableListOf<Pair<Long, String>>()
-    val regex = Regex("\\[(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,3}))?]")
     var truncated = false
     reader.lineSequence().forEach { line ->
         if (entries.size >= MAX_CLIPS) { truncated = true; return@forEach }
-        val matches = regex.findAll(line).toList()
+        val matches = lrcTimestampRegex.findAll(line).toList()
         if (matches.isNotEmpty()) {
             val text = line.substringAfterLast(']').trim()
             matches.forEach { match ->
@@ -940,12 +944,12 @@ private fun serializeTimeline(clips: List<TimelineClip>, format: TimelineExportF
 }
 
 private fun parseSrtTime(value: String): Long {
-    val match = Regex("(\\d+):(\\d{2}):(\\d{2})[,.](\\d{1,3})").find(value) ?: return 0L
+    val match = srtTimestampRegex.find(value) ?: return 0L
     return match.groupValues[1].toLong() * 3_600_000 + match.groupValues[2].toLong() * 60_000 + match.groupValues[3].toLong() * 1000 + match.groupValues[4].padEnd(3, '0').take(3).toLong()
 }
 
 private fun parseAssTime(value: String): Long {
-    val match = Regex("(\\d+):(\\d{2}):(\\d{2})[.](\\d{1,2})").find(value.trim()) ?: return 0L
+    val match = assTimestampRegex.find(value.trim()) ?: return 0L
     return match.groupValues[1].toLong() * 3_600_000 + match.groupValues[2].toLong() * 60_000 + match.groupValues[3].toLong() * 1000 + match.groupValues[4].padEnd(2, '0').take(2).toLong() * 10
 }
 

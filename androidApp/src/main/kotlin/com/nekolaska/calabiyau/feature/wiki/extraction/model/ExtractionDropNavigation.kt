@@ -15,7 +15,8 @@ internal data class DropLocation(
     val containerId: String? = null,
     val linkedPool: Boolean = false,
     val query: String = "",
-    val poolQuality: String? = null
+    val poolQuality: String? = null,
+    val showItemRates: Boolean = true
 ) {
     val hasDetail: Boolean get() = sourceId != null || containerId != null
     val contentKey: String get() = if (reference != null) "reference:$reference"
@@ -40,6 +41,9 @@ internal data class DropNavigation(val history: List<DropLocation> = listOf(Drop
 
     fun openItem(item: ExtractionDropItem): DropNavigation = push(DropLocation(
         task = DropTask.ITEMS, itemName = item.name, itemQuality = item.qualityLabel))
+
+    fun showItemRates(show: Boolean): DropNavigation = if (current.itemName == null || current.hasDetail || current.showItemRates == show) this
+        else copy(history = history.dropLast(1) + current.copy(showItemRates = show))
 
     fun openSource(id: String, query: String = ""): DropNavigation = push(current.copy(
         sourceId = id, containerId = null, linkedPool = false, query = query, poolQuality = null))

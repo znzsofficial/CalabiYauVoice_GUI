@@ -8,5 +8,6 @@ data class GameModeDetail(
     val winCondition: String,
     val settings: String,
     val maps: List<String>,
-    val wikiUrl: String
+    val wikiUrl: String,
+    val chapters: List<FieldGuideChapter> = emptyList()
 )

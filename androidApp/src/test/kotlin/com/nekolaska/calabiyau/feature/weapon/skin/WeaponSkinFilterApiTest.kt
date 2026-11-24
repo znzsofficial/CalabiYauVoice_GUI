@@ -23,6 +23,7 @@ class WeaponSkinFilterApiTest {
             |- class="divsort" data-param1="独舞" data-param2="4" data-param3="限时商城" data-param4="480" data-param5="无"
             | <img alt="武器外观 1.png" src="https://patchwiki.biligame.com/images/klbq/thumb/a/ab/a.png/70px-a.png" srcset="https://patchwiki.biligame.com/images/klbq/a/ab/a.png 1.5x"/><br /><a>独舞</a>：回味时光
             | 这是一段足够长的武器外观介绍文字用于解析
+            | 这是特别收录在武器皮肤套装中的获取信息
             """.trimIndent(),
             weaponMeta = mapOf("独舞" to WeaponSkinFilterApi.WeaponMeta("主武器", "微型冲锋枪"))
         )

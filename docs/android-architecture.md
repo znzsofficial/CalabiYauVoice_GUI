@@ -1,6 +1,6 @@
 # Android 当前架构
 
-基线：[Android 2.3.0（67）](releases/2.3.0.md)。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备待验场景见[验收清单](device-acceptance.md)。
+基线：[Android 2.3.1（68）](releases/2.3.1.md)。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备待验场景见[验收清单](device-acceptance.md)。
 
 ## 模块边界
 
@@ -56,7 +56,7 @@
 
 ## 原生覆盖边界
 
-角色/武器/地图详情、装饰、PC设置、新人指南、弦化/定位/增幅网络等已有原生实现。首页的[弦溯战线专题](extraction-mode-implementation.md)提供按物品／来源的掉落查询、物资／配件、枪械／防具和工坊；「掉落表格」保留网页原文。公告、活动、剧情、历史、投稿等有原生目录，但部分正文或外站作品仍走网页。
+角色/武器/地图详情、装饰、PC设置、新人指南、弦化/定位/增幅网络等已有原生实现。[弦溯战线专题](extraction-mode-implementation.md)的单件抽中率按物品读取索引与分片，候选容器继续读完整池表；地图与玩法资料在原生页阅读，互动地图打开 Wiki 组件。[活动详情](android-wiki-ui-architecture.md#活动详情)原生展示可验证的规则、奖励与剧情；网页音乐、交互章节和外站活动保留原入口。
 
 特别行动、赫尔墨斯、赛事系统仍是网页入口；视频交给外部播放入口。登录、编辑、投稿表单不因原生阅读页新增而被替代。具体名单和历史证据见[导航覆盖](wiki-navigation-coverage.md)。
 

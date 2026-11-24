@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
+import com.nekolaska.calabiyau.feature.wiki.extraction.parser.qualityCode
 
 @Composable
 internal fun ExtractionDropLookupList(
@@ -34,6 +35,7 @@ internal fun ExtractionDropLookupList(
     backLabel: String = "返回物品列表",
     loading: Boolean = false,
     loadFailed: Boolean = false,
+    rates: LoadState<List<DropRate>>?, onShowRates: (Boolean) -> Unit,
     status: @Composable () -> Unit = {}
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -41,6 +43,7 @@ internal fun ExtractionDropLookupList(
     var includeZero by rememberSaveable { mutableStateOf(false) }
     var sourceCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showLowRates by rememberSaveable(selectedName, selectedQuality) { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val colors = MaterialTheme.colorScheme
     val itemListState = rememberLazyListState()
@@ -48,6 +51,11 @@ internal fun ExtractionDropLookupList(
     val currentSelectedQuality = resolveDropQualityLabel(selectedQuality,
         lookup.keys.filter { it.name == selectedName }.map { it.qualityLabel })
     val selected = lookup.keys.singleOrNull { it.name == selectedName && it.qualityLabel == currentSelectedQuality }
+    val selectedCode = selected?.qualityCode ?: qualityCode(selectedQuality.orEmpty())
+    val rateSelection = remember(rates?.data, selectedCode, showLowRates) {
+        rates?.let { selectDropRates(it.data, selectedCode, showLowRates) }
+    }
+    val ratesListState = rememberLazyListState()
     val qualities = remember(lookup) { lookup.keys.distinctBy { it.qualityLabel } }
     val currentQuality = resolveDropQualityLabel(quality, qualities.map { it.qualityLabel })
     val results = remember(lookup, query, currentQuality) {
@@ -69,7 +77,7 @@ internal fun ExtractionDropLookupList(
         (sourceCategory == null || it.source.filterCategory == sourceCategory) }
     LazyColumn(
         Modifier.fillMaxSize(),
-        state = if (selectedName == null) itemListState else sourceListState,
+        state = if (selectedName == null) itemListState else if (rates != null) ratesListState else sourceListState,
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -77,7 +85,7 @@ internal fun ExtractionDropLookupList(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (selectedName != null) {
                     val label = selected?.qualityLabel ?: selectedQuality.orEmpty()
-                    val qCode = selected?.qualityCode ?: 0
+                    val qCode = selectedCode ?: 0
                     val qColor = extractionDropQualityColor(qCode)
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -105,6 +113,12 @@ internal fun ExtractionDropLookupList(
                             }
                         }
                     }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = rates != null, onClick = { onShowRates(true) }, label = { Text("单件抽中率") })
+                        FilterChip(selected = rates == null, onClick = { onShowRates(false) }, label = { Text("候选容器") })
+                    }
+                }
+                if (selectedName != null && rates == null) {
                     val sourceFilterCount = (if (sourceCategory != null) 1 else 0) + (if (includeZero) 1 else 0)
                     DropFilterBar(
                         summary = if (loading && lookup.isEmpty()) "正在加载来源…"
@@ -143,7 +157,7 @@ internal fun ExtractionDropLookupList(
                             }
                         }
                     }
-                } else {
+                } else if (selectedName == null) {
                     SearchBar(
                         keyword = query,
                         onKeywordChange = { query = it },
@@ -163,10 +177,12 @@ internal fun ExtractionDropLookupList(
                         activeCount = if (currentQuality != null) 1 else 0
                     )
                 }
-                status()
+                if (rates == null) status()
             }
         }
-        if (loading && lookup.isEmpty()) {
+        if (rates != null && rateSelection != null) {
+            dropRateItems(rates, rateSelection, showLowRates, onShowAll = { showLowRates = it })
+        } else if (loading && lookup.isEmpty()) {
             items(6, key = { "lookup-skeleton:$it" }, contentType = { "skeleton" }) {
                 DropLookupRowSkeleton(Modifier.dropItemMotion(this), source = selectedName != null)
             }

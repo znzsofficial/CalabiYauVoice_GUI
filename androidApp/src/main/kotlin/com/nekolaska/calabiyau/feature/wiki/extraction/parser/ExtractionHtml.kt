@@ -27,5 +27,9 @@ internal fun itemProse(element: Element?, remove: String? = null): String {
 internal fun headerKey(value: String): String = value.replace('（', '(').replace('）', ')')
     .filterNot { it.isWhitespace() || it == '\u00a0' }
 
-internal fun qualityCode(label: String): Int? = Regex("""^Q(\d+)(?:\s+.*)?$""")
-    .matchEntire(label)?.groupValues?.get(1)?.toIntOrNull()
+private val poolItemCount = Regex("""(\d+)\s*项""")
+private val qualityLabel = Regex("""^Q(\d+)(?:\s+.*)?$""")
+
+internal fun declaredPoolItemCount(text: String): Int? = poolItemCount.matchEntire(text)?.groupValues?.get(1)?.toIntOrNull()
+
+internal fun qualityCode(label: String): Int? = qualityLabel.matchEntire(label)?.groupValues?.get(1)?.toIntOrNull()

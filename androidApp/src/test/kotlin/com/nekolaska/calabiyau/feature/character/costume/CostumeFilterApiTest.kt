@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.feature.character.costume
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class CostumeFilterApiTest {
 
@@ -83,15 +82,17 @@ class CostumeFilterApiTest {
     fun fallsBackToLegacyDivsortTable() {
         val costumes = CostumeFilterApi.parseCostumeHtml(
             """
-            |- class="divsort" data-param1="信" data-param2="3" data-param3="活动" data-param4="无" data-param5="无"
+            |- class="divsort" data-param1="信" data-param2="3" data-param3="活动, ,商城" data-param4="无" data-param5="无"
             | <img alt="角色时装图鉴 1.png" src="https://patchwiki.biligame.com/images/klbq/1/11/a.png"/><br />信：旧表时装
-            | 这是一段足够长的时装介绍文字用于回退解析
+            | 这是一段足够长的时装介绍文字<br><br>引文
+            | 单时装价格与折扣说明都不是时装介绍
             """.trimIndent()
         )
 
         assertEquals("信：旧表时装", costumes.single().name)
         assertEquals("信", costumes.single().character)
         assertEquals(CostumeFilterApi.Quality.SUPERIOR, costumes.single().quality)
-        assertTrue(costumes.single().description.contains("时装介绍"))
+        assertEquals(listOf("活动", "商城"), costumes.single().sources)
+        assertEquals("这是一段足够长的时装介绍文字\n\n引文", costumes.single().description)
     }
 }

@@ -8,11 +8,13 @@ import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
+import data.ioApiCall
 import data.toErrorKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -71,67 +73,28 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
         allowMemoryCache = allowMemoryCache
     )
 
-    override suspend fun fetchFromCache(): ApiResult<List<FactionData>> =
-        withContext(Dispatchers.IO) {
-            try {
-                val results = FACTIONS.map { faction ->
-                    async { loadCachedFaction(faction) }
-                }.awaitAll()
+    override suspend fun fetchFromCache() = ioApiCall("读取角色列表缓存失败") {
+        loadFactions("所有阵营缓存加载失败", ::loadCachedFaction)
+    }
 
-                val errors = results.filterIsInstance<ApiResult.Error>()
-                if (errors.size == results.size) {
-                    return@withContext ApiResult.Error(
-                        "所有阵营缓存加载失败: ${errors.first().message}",
-                        kind = errors.first().kind
-                    )
-                }
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean) = ioApiCall("获取角色列表失败") {
+        loadFactions("所有阵营加载失败") { fetchFaction(it, forceRefresh) }
+    }
 
-                val successes = results.filterIsInstance<ApiResult.Success<FactionData>>()
-                val maxAge = successes.maxOfOrNull { it.cacheAgeMs } ?: 0L
-                val factions = results.mapIndexed { index, result ->
-                    when (result) {
-                        is ApiResult.Success -> result.value
-                        is ApiResult.Error -> FactionData(FACTIONS[index], emptyList(), result.message)
-                    }
-                }
-                ApiResult.Success(factions, isOffline = true, cacheAgeMs = maxAge)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                ApiResult.Error("读取角色列表缓存失败: ${e.message}", kind = e.toErrorKind())
+    internal suspend fun loadFactions(allFailed: String, load: suspend (String) -> ApiResult<FactionData>): ApiResult<List<FactionData>> = coroutineScope {
+        val results = FACTIONS.map { faction -> async { load(faction) } }.awaitAll()
+        val successes = results.filterIsInstance<ApiResult.Success<FactionData>>()
+        if (successes.isEmpty()) {
+            val first = results.firstNotNullOf { it as? ApiResult.Error }
+            return@coroutineScope ApiResult.Error("$allFailed: ${first.message}", kind = first.kind)
+        }
+        val factions = results.mapIndexed { index, result ->
+            when (result) {
+                is ApiResult.Success -> result.value
+                is ApiResult.Error -> FactionData(FACTIONS[index], emptyList(), result.message)
             }
         }
-
-    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
-        try {
-            val results = FACTIONS.map { faction ->
-                async { fetchFaction(faction, forceRefresh) }
-            }.awaitAll()
-
-            val errors = results.filterIsInstance<ApiResult.Error>()
-            if (errors.size == results.size) {
-                return@withContext ApiResult.Error(
-                    "所有阵营加载失败: ${errors.first().message}",
-                    kind = errors.first().kind
-                )
-            }
-
-            val successes = results.filterIsInstance<ApiResult.Success<FactionData>>()
-            val isOffline = successes.any { it.isOffline }
-            val maxAge = successes.maxOfOrNull { it.cacheAgeMs } ?: 0L
-
-            val factions = results.mapIndexed { index, result ->
-                when (result) {
-                    is ApiResult.Success -> result.value
-                    is ApiResult.Error -> FactionData(FACTIONS[index], emptyList(), result.message)
-                }
-            }
-            ApiResult.Success(factions, isOffline = isOffline, cacheAgeMs = maxAge)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            ApiResult.Error("获取角色列表失败: ${e.message}", kind = e.toErrorKind())
-        }
+        ApiResult.Success(factions, isOffline = successes.any { it.isOffline }, cacheAgeMs = successes.maxOf { it.cacheAgeMs })
     }
 
     private suspend fun fetchFaction(
@@ -265,14 +228,12 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             .mapKeys { (fileName, _) -> fileName.removeSuffix("-初始立绘.png") }
     }
 
+    private val portraitPattern = Regex("""^.+-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""", RegexOption.IGNORE_CASE)
+
     /** 逐角色页面解析兜底；限并发 3，失败时保留原数据而不是静默丢立绘。 */
     private suspend fun fetchPortraitsViaPages(
         characters: List<CharacterInfo>
     ): Map<String, String> = withContext(Dispatchers.IO) {
-        val portraitPattern = Regex(
-            """^.+-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""",
-            RegexOption.IGNORE_CASE
-        )
         val result = ConcurrentHashMap<String, String>()
         characters.map { char ->
             async {

@@ -2,12 +2,14 @@ package com.nekolaska.calabiyau.feature.wiki.game
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -21,11 +23,46 @@ import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
+import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
+import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
+import com.nekolaska.calabiyau.core.ui.rememberSectionSelection
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 
 /** A single-mode destination is a reading page rather than a one-row collapsible directory. */
 @Composable
-internal fun ModeReader(mode: GameModeDetail, onMap: (String) -> Unit) {
+internal fun ModeReader(mode: GameModeDetail, onMap: (String) -> Unit, onOpenLink: (String) -> Unit) {
+    val titles = remember(mode.chapters) { listOf("模式介绍") + mode.chapters.map { it.title } }
+    // A legacy offline prefetch contains only the overview; it must not reset a restored chapter.
+    val selection = rememberSectionSelection(mode.name, if (mode.chapters.isEmpty()) emptyList() else titles)
+    val chapter = mode.chapters.firstOrNull { it.title == selection.selectedKey }
+    val scrollStates = rememberSaveableStateHolder()
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (mode.chapters.isNotEmpty()) {
+            var showChapters by remember { mutableStateOf(false) }
+            val current = chapter?.title ?: titles.first()
+            Box(Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(horizontal = AppSpacing.screen)) {
+                OutlinedButton(onClick = { showChapters = true }, shape = AppShapes.compactCard) {
+                    Text("章节：$current")
+                    Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+                }
+            }
+            if (showChapters) WikiSelectionSheet("选择章节", onDismiss = { showChapters = false }) {
+                items(titles, key = { it }) { title ->
+                    SelectionOptionRow(label = title, selected = title == current, onClick = {
+                        selection.select(title); showChapters = false
+                    })
+                }
+            }
+        }
+        scrollStates.SaveableStateProvider(chapter?.title ?: titles.first()) {
+            if (chapter == null) ModeOverview(mode, onMap)
+            else FieldGuideChapterPage(chapter, onOpenLink)
+        }
+    }
+}
+
+@Composable
+private fun ModeOverview(mode: GameModeDetail, onMap: (String) -> Unit) {
     val paragraphs = remember(mode.settings) { mode.settings.split("\n\n").filter(String::isNotBlank) }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = 680.dp).fillMaxSize(), contentPadding = PaddingValues(AppSpacing.screen),

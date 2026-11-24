@@ -372,7 +372,11 @@ suspend fun mergeWavFiles(
             .distinctBy { it.absoluteFile.normalize().path.lowercase() }
     }
 
-    val wavFiles = allWavFiles.filterNot { isGeneratedMergedWav(it, dir) }
+    val mergeDir = dir.absoluteFile.normalize()
+    val generatedNameRegex = generatedMergedWavNameRegex(dir)
+    val wavFiles = allWavFiles.filterNot { file ->
+        file.parentFile?.absoluteFile?.normalize() == mergeDir && generatedNameRegex.matches(file.name)
+    }
     val skippedMergedCount = allWavFiles.size - wavFiles.size
     if (skippedMergedCount > 0) {
         onLog("已跳过 $skippedMergedCount 个已生成的合并 WAV 文件。")
@@ -535,11 +539,9 @@ private fun approximatelyEquals(a: Float, b: Float): Boolean {
     return abs(a - b) < AUDIO_RATE_TOLERANCE
 }
 
-private fun isGeneratedMergedWav(file: File, mergeDir: File): Boolean {
-    if (file.parentFile?.absoluteFile?.normalize() != mergeDir.absoluteFile.normalize()) return false
+private fun generatedMergedWavNameRegex(mergeDir: File): Regex {
     val expectedPrefix = Regex.escape("${mergeOutputBaseName(mergeDir)}$GENERATED_MERGED_TAG")
     return Regex("^$expectedPrefix(?:_[1-9]\\d*)?(?: \\((?:[2-9]|[1-9]\\d+)\\))?\\.wav$", RegexOption.IGNORE_CASE)
-        .matches(file.name)
 }
 
 private fun reserveMergeOutputFiles(dir: File, count: Int): List<File> {

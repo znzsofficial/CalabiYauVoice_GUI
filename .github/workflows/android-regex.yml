@@ -1,0 +1,31 @@
+name: Android regex compatibility
+
+on:
+  push:
+    paths:
+      - 'androidApp/src/main/kotlin/**'
+      - 'shared/src/commonMain/kotlin/**'
+      - 'shared/src/androidMain/kotlin/**'
+      - 'scripts/*android_icu_regex.py'
+      - '.github/workflows/android-regex.yml'
+  pull_request:
+    paths:
+      - 'androidApp/src/main/kotlin/**'
+      - 'shared/src/commonMain/kotlin/**'
+      - 'shared/src/androidMain/kotlin/**'
+      - 'scripts/*android_icu_regex.py'
+      - '.github/workflows/android-regex.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Android regex literals against system ICU
+        run: |
+          python3 -B -m unittest discover -s scripts -p 'test_check_android_icu_regex.py'
+          python3 -B scripts/check_android_icu_regex.py

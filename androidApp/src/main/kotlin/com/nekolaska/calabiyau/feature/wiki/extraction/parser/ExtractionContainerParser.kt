@@ -11,6 +11,8 @@ internal object ExtractionContainerParser {
     private val togglePattern = Regex("mw-customtoggle-sec-c-(\\d+)")
     private const val panelSelector = "[id^=mw-customcollapsible-sec-c-]"
     private val panelPattern = Regex("mw-customcollapsible-sec-c-(\\d+)")
+    private val expandPoolCount = Regex("""展开\s+(\d+)\s*项""")
+    private val containerTableCount = Regex("""容器掉落全表[（(]\s*(\d+)\s*个容器[）)]""")
 
     fun parseResult(html: String): ExtractionParseResult {
         val root = Jsoup.parse(html)
@@ -76,7 +78,7 @@ internal object ExtractionContainerParser {
                         emptyList()
                     } else {
                         usedPanels.add(panel)
-                        val expected = Regex("""展开\s+(\d+)\s*项""").matchEntire(pool)
+                        val expected = expandPoolCount.matchEntire(pool)
                             ?.groupValues?.get(1)?.toIntOrNull()
                         if (expected == null) issues += "container-table: missing total $id"
                         parseGroups(panel, issues).also { groups ->
@@ -102,7 +104,7 @@ internal object ExtractionContainerParser {
             if (it !in usedPanels) issues += "container-table: orphan panel"
         }
         val declared = root.select("h2").mapNotNull {
-            Regex("""容器掉落全表[（(]\s*(\d+)\s*个容器[）)]""").find(content(it))?.groupValues?.get(1)?.toIntOrNull()
+            containerTableCount.find(content(it))?.groupValues?.get(1)?.toIntOrNull()
         }.singleOrNull()
         if (declared == null) issues += "container-table: missing/ambiguous declared container count"
         else if (declared != entries.size) issues += "container-table: declared container count mismatch"
@@ -118,8 +120,7 @@ internal object ExtractionContainerParser {
             if (element.hasClass("sec-drop-pool__q")) {
                 if (label != null) issues += "container-pool: missing chips"
                 label = content(element.select(".sec-drop-pool__tag").singleOrNull()).takeIf { it.isNotBlank() }
-                count = Regex("""(\d+)\s*项""").matchEntire(content(element.select(".sec-drop-pool__cnt").singleOrNull()))
-                    ?.groupValues?.get(1)?.toIntOrNull()
+                count = declaredPoolItemCount(content(element.select(".sec-drop-pool__cnt").singleOrNull()))
                 if (label == null || count == null) issues += "container-pool: missing group metadata"
             } else {
                 val items = element.select(".sec-drop-chip").map { content(it) }

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.ExtractionCatalogApi
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.extractionContainersApi
+import com.nekolaska.calabiyau.feature.wiki.extraction.api.extractionDropRateApi
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.rememberDropArtwork
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.source.ExtractionCatalogRemoteSource
@@ -86,6 +87,15 @@ internal fun ExtractionDropsScreen(
 
     // Declared before the sheets: a modal's own back handler retains priority.
     BackHandler(enabled = isActive() && navigation.canGoBack) { goBack() }
+    // Typing, changing quality and browsing sources do not request probability shards. A different
+    // name owns a separate LoadState so a late response cannot appear under the new item's header.
+    val rates = location.itemName?.takeIf { location.showItemRates && location.task == DropTask.ITEMS && location.reference == null }?.let { name ->
+        key(name) {
+            rememberLoadState(initial = emptyList<DropRate>(), enabled = isActive() && !location.hasDetail,
+                cachedFetch = { extractionDropRateApi.fetch(name, cacheOnly = true) },
+                fetch = { force -> extractionDropRateApi.fetch(name, forceRefresh = force) })
+        }
+    }
     val containers = rememberLoadState(initial = emptyList<ExtractionEntry>(),
         cachedFetch = { extractionContainersApi.fetch(cacheOnly = true) },
         fetch = { force -> extractionContainersApi.fetch(forceRefresh = force, allowMemoryCache = false) })
@@ -105,7 +115,12 @@ internal fun ExtractionDropsScreen(
     val artwork = rememberDropArtwork(enabled = isActive() && containers.data.isNotEmpty(), catalogEntries = catalog.data,
         allowNetwork = !containersPending && catalogRequested && !catalog.isLoading && !catalog.isShowingCachedPrefetch)
     val active = if (location.reference != null) catalog else containers
-    val page = if (location.reference != null) ExtractionCatalogKind.DROPS.pageName else ExtractionCatalogRemoteSource.CONTAINERS_PAGE
+    fun refreshCurrent() {
+        if (rates != null) { rates.reload(forceRefresh = true); return }
+        active.reload(forceRefresh = true)
+        if (location.task == DropTask.SOURCES && location.reference == null) catalog.reload(forceRefresh = true)
+    }
+    val page = if (location.reference != null || rates != null) ExtractionCatalogKind.DROPS.pageName else ExtractionCatalogRemoteSource.CONTAINERS_PAGE
     val uiState = rememberSaveableStateHolder()
     val detailState = rememberSaveableStateHolder()
     val containerEntries = containers.data
@@ -129,10 +144,7 @@ internal fun ExtractionDropsScreen(
             title = { Text(if (location.reference != null) dropReferenceTitle else "掉落查询", fontWeight = FontWeight.Bold) },
             navigationIcon = { BackNavButton(onClick = ::goBack) },
             actions = {
-                RefreshActionButton(onClick = {
-                    active.reload(forceRefresh = true)
-                    if (location.task == DropTask.SOURCES && location.reference == null) catalog.reload(forceRefresh = true)
-                }, enabled = !active.isLoading)
+                RefreshActionButton(onClick = ::refreshCurrent, enabled = !(rates?.isLoading ?: active.isLoading))
                 Box {
                     IconButton(onClick = { moreActions = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
                     DropdownMenu(expanded = moreActions && isActive(), onDismissRequest = { moreActions = false }) {
@@ -199,8 +211,8 @@ internal fun ExtractionDropsScreen(
                             }
                         )
                     } else PullToRefreshBox(
-                        isRefreshing = active.isLoading && active.data.isNotEmpty(),
-                        onRefresh = { active.reload(forceRefresh = true) },
+                        isRefreshing = if (rates != null) rates.isLoading && rates.data.isNotEmpty() else active.isLoading && active.data.isNotEmpty(),
+                        onRefresh = ::refreshCurrent,
                         modifier = Modifier.fillMaxSize()
                     ) {
                         val status: @Composable () -> Unit = {
@@ -252,7 +264,7 @@ internal fun ExtractionDropsScreen(
                                 lookup.value, location.itemName, location.itemQuality,
                                 onChooseItem = { item -> if (item == null) goBack() else navigate { it.openItem(item) } },
                                 onSource = { source -> navigate { it.openContainer(source.id, location.itemName.orEmpty(), location.itemQuality) } },
-                                artwork = artwork, isActive = isActive(),
+                                artwork = artwork, isActive = isActive(), rates = rates, onShowRates = { show -> navigate { it.showItemRates(show) } },
                                 loading = containersPending, loadFailed = containers.error != null, status = status,
                                 filtersAuthoritative = !containersPending && containers.error == null,
                                 backLabel = if (navigation.history.dropLast(1).lastOrNull()?.hasDetail == true) "返回来源详情" else "返回物品列表"
@@ -524,7 +536,7 @@ private fun ExtractionDropBrowser(
 }
 
 @Composable
-private fun DropErrorBanner(message: String, retryLabel: String, onRetry: () -> Unit) {
+internal fun DropErrorBanner(message: String, retryLabel: String, onRetry: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = smoothCornerShape(12.dp),

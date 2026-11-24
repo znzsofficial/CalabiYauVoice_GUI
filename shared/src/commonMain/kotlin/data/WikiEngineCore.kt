@@ -43,6 +43,8 @@ object WikiEngineCore {
 
     private val downloadDirectoryLocks = ConcurrentHashMap<String, Mutex>()
     private const val DOWNLOAD_MANIFEST = ".calabiyau-downloads.tsv"
+    private val downloadExtensionRegex = Regex("[a-z0-9]{1,10}")
+    private val manifestSha256Regex = Regex("[a-f0-9]{64}")
 
     // ========== 角色名缓存（双平台共享语义，但各自持有实例） ==========
 
@@ -197,7 +199,8 @@ object WikiEngineCore {
         val path1 = LinkedHashMap<String, String>()
         var aicontinue: String? = null
         do {
-            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "allimages", "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", *(if (aicontinue != null) arrayOf("aicontinue" to aicontinue) else emptyArray()))
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "allimages",
+                "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", "aicontinue" to aicontinue)
             val json = requireWikiJson(fetchStringFn(url), "文件前缀搜索")
             try {
                 val res = jsonParser.decodeFromString<AiResponse>(json)
@@ -327,7 +330,7 @@ object WikiEngineCore {
                 var safeName = sanitizeFileName(name)
                 if (!safeName.contains('.')) {
                     val ext = url.substringBefore('?').substringAfterLast('.', "").lowercase()
-                        .takeIf { it.matches(Regex("[a-z0-9]{1,10}")) }
+                        .takeIf(downloadExtensionRegex::matches)
                     if (ext != null) safeName += ".$ext"
                 }
 
@@ -450,7 +453,7 @@ object WikiEngineCore {
                 val targetName = parts[0]
                 val url = parts[1]
                 if (sanitizeFileName(targetName) == targetName && url.isNotBlank()) {
-                    val sha = parts.getOrNull(3)?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
+                    val sha = parts.getOrNull(3)?.takeIf(manifestSha256Regex::matches)
                     result[url] = DownloadManifestEntry(targetName, parts.getOrNull(2)?.toLongOrNull(), sha)
                 }
             }
@@ -528,7 +531,8 @@ object WikiEngineCore {
         val list = mutableListOf<String>()
         var token: String? = null
         do {
-            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "categorymembers", "cmtitle" to category, "cmnamespace" to namespace.toString(), "cmtype" to cmtype, "cmlimit" to "500", "format" to "json", *(if (token != null) arrayOf("cmcontinue" to token) else emptyArray()))
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "categorymembers", "cmtitle" to category,
+                "cmnamespace" to namespace.toString(), "cmtype" to cmtype, "cmlimit" to "500", "format" to "json", "cmcontinue" to token)
             val json = requireWikiJson(fetchStringFn(url), "分类成员")
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
@@ -560,7 +564,9 @@ object WikiEngineCore {
         val list = mutableListOf<Pair<String, String>>()
         var token: String? = null
         do {
-            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "generator" to "categorymembers", "gcmtitle" to category, "gcmnamespace" to "6", "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json", "gcmlimit" to "500", *(if (token != null) arrayOf("gcmcontinue" to token) else emptyArray()))
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "generator" to "categorymembers", "gcmtitle" to category,
+                "gcmnamespace" to "6", "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json", "gcmlimit" to "500",
+                "gcmcontinue" to token)
             val json = requireWikiJson(fetchStringFn(url), "分类文件")
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)

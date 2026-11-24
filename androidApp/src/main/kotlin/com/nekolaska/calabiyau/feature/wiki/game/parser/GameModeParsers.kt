@@ -3,7 +3,10 @@ package com.nekolaska.calabiyau.feature.wiki.game.parser
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAGE
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import util.wikiPathEncode
 
 object GameModeParsers {
@@ -11,10 +14,15 @@ object GameModeParsers {
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
     private val GALLERY_REGEX = Regex("""<gallery[^>]*>[\s\S]*?</gallery>""", RegexOption.IGNORE_CASE)
     private val KEY_TEMPLATE_REGEX = Regex("""\{\{按键\|([^}|]+)\}\}""")
-    private val FILE_LINK_REGEX = Regex("""\[\[(?:文件|File):[^\]]*]]""", RegexOption.IGNORE_CASE)
-    private val CATEGORY_LINK_REGEX = Regex("""\[\[(?:分类|Category):[^\]]*]]""", RegexOption.IGNORE_CASE)
-    private val WIKI_LINK_ALIAS_REGEX = Regex("""\[\[([^\]|]*)\|([^\]]*)]\]""")
-    private val WIKI_LINK_REGEX = Regex("""\[\[([^\]]*)]\]""")
+    private val FILE_LINK_REGEX = Regex("""\[\[(?:文件|File):[^\]]*\]\]""", RegexOption.IGNORE_CASE)
+    private val CATEGORY_LINK_REGEX = Regex("""\[\[(?:分类|Category):[^\]]*\]\]""", RegexOption.IGNORE_CASE)
+    private val WIKI_LINK_ALIAS_REGEX = Regex("""\[\[([^\]|]*)\|([^\]]*)\]\]""")
+    private val WIKI_LINK_REGEX = Regex("""\[\[([^\]]*)\]\]""")
+    private val mapDeclaration = Regex("""(?m)^\*\s*模式地图[：:](.*)$""")
+    private val mapLink = Regex("""\[\[([^\]|]+)(?:\|[^\]]+)?\]\]""")
+    private val winHeading = Regex("""(?m)^==\s*获胜条件\s*==\s*$""")
+    private val settingsHeading = Regex("""(?m)^==\s*模式设定\s*==\s*$""")
+    private val nextHeading = Regex("""(?m)^==[^=]""")
     private val STRIKE_REGEX = Regex("""<s>[\s\S]*?</s>""")
     private val BR_REGEX = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
     private val HTML_TAG_REGEX = Regex("""<[^>]+>""")
@@ -24,7 +32,20 @@ object GameModeParsers {
 
     fun parseModeMapMapping(wikitext: String): Map<String, List<String>> = ModeMapMappingParser.parse(wikitext)
 
-    fun parseModeWikitext(mode: ModeEntry, wikitext: String, maps: List<String>): GameModeDetail {
+    private val extractionChapters = setOf("等级成长系统", "角色天赋", "任务系统", "局内事件")
+
+    fun parseModeWikitext(mode: ModeEntry, wikitext: String, maps: List<String>, html: String? = null): GameModeDetail =
+        readMode(mode, wikitext, maps, html?.takeIf { mode.pageName == EXTRACTION_MODE_PAGE && it.isNotBlank() }?.let(Jsoup::parse))
+
+    internal fun validatedExtraction(mode: ModeEntry, wikitext: String, maps: List<String>, html: String?): GameModeDetail? {
+        if (wikitext.isBlank() || (html != null && html.isBlank())) return null
+        val document = html?.let(Jsoup::parse)
+        val detail = readMode(mode, wikitext, maps, document)
+        if (document != null && !completeFieldGuide(wikitext, document, extractionChapters, detail.chapters)) return null
+        return detail.takeIf { it.summary.isNotBlank() || it.settings.isNotBlank() || it.winCondition.isNotBlank() || it.chapters.isNotEmpty() }
+    }
+
+    private fun readMode(mode: ModeEntry, wikitext: String, maps: List<String>, document: Document?): GameModeDetail {
         val body = stripWikiTemplates(
             KEY_TEMPLATE_REGEX.replace(GALLERY_REGEX.replace(wikitext, ""), "$1")
         )
@@ -37,18 +58,21 @@ object GameModeParsers {
                 .filter { it.isNotBlank() }.joinToString("\n") else ""
         }
         val modeMaps = if (extraction && maps.isEmpty()) {
-            Regex("(?m)^\\*\\s*模式地图[：:](.*)$").find(wikitext)?.groupValues?.get(1)
-                ?.let { line -> Regex("""\[\[([^]|]+)(?:\|[^]]+)?]]""").findAll(line).map { it.groupValues[1].trim() }.toList() }
+            mapDeclaration.find(wikitext)?.groupValues?.get(1)
+                ?.let { line -> mapLink.findAll(line).map { it.groupValues[1].trim() }.toList() }
                 .orEmpty()
         } else maps
 
         return GameModeDetail(
             name = mode.displayName,
             summary = summary,
-            winCondition = cleanSection(extractSection(body, "获胜条件")),
-            settings = cleanSection(extractSection(body, "模式设定")),
+            winCondition = cleanSection(extractSection(body, winHeading)),
+            settings = cleanSection(extractSection(body, settingsHeading)),
             maps = modeMaps,
-            wikiUrl = "$WIKI_BASE$enc"
+            wikiUrl = "$WIKI_BASE$enc",
+            chapters = if (extraction && document != null) {
+                parseFieldGuide(document, extractionChapters, extractionArticleUrl(mode.pageName))
+            } else emptyList()
         )
     }
 
@@ -98,11 +122,10 @@ object GameModeParsers {
         return result.toString()
     }
 
-    private fun extractSection(wikitext: String, sectionName: String): String {
-        val pattern = Regex("""^==\s*${Regex.escape(sectionName)}\s*==\s*$""", RegexOption.MULTILINE)
+    private fun extractSection(wikitext: String, pattern: Regex): String {
         val match = pattern.find(wikitext) ?: return ""
         val start = match.range.last + 1
-        val nextSection = Regex("""^==[^=]""", RegexOption.MULTILINE).find(wikitext, start)
+        val nextSection = nextHeading.find(wikitext, start)
         val end = nextSection?.range?.first ?: wikitext.length
         return wikitext.substring(start, end)
     }

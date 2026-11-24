@@ -6,6 +6,12 @@ import org.jsoup.nodes.Element
 
 /** Adapters for source cards, modern shared pools, and historical summary tables. */
 internal object ExtractionDropParser {
+    private val identicalStageCount = Regex("""(\d+)\s*个阶段的物品与件数完全相同""")
+    private val sectionDropCount = Regex("""(?:^|[。\n])\s*件数\s*[：:]\s*([^。\n]+)""")
+    private val crystalContainerId = Regex("""晶骸(?:容器|核心)\s+(\d+)""")
+    private val weightedItemRow = Regex("""^(.+?)\s*·\s*\d+(?:\.\d+)?%$""")
+    private val starredItemQuality = Regex("""^(.+?)（([★]{1,5})\s*(优秀|精致|卓越|完美|臻藏)）$""")
+
     fun parse(root: Element, issues: MutableList<String>): List<ExtractionEntry> {
         val records = mutableListOf<DropParsedRecord>()
         var scope = 0
@@ -36,7 +42,7 @@ internal object ExtractionDropParser {
                         stageRules = generateSequence(element.nextElementSibling()) { it.nextElementSibling() }
                             .takeWhile { it.tagName() != "h2" }.filter { it.tagName() == "p" }
                             .map { content(it) }.filter { it.startsWith("「阈值」为首领战的阶段推进值") }.joinToString("\n")
-                        Regex("""(\d+)\s*个阶段的物品与件数完全相同""").find(intro)?.groupValues?.get(1)
+                        identicalStageCount.find(intro)?.groupValues?.get(1)
                             ?.toIntOrNull()?.let { declaredStages[scope] = it }
                     }
                 }
@@ -105,7 +111,7 @@ internal object ExtractionDropParser {
                 if (label.isNotBlank() && value.isNotBlank()) add(ExtractionField(label, value))
             }
             if (none { it.label == "掉落件数" } && tierPoolDeclaration.containsMatchIn(note)) {
-                Regex("""(?:^|[。\n])\s*件数\s*[：:]\s*([^。\n]+)""").findAll(note).singleOrNull()?.let {
+                sectionDropCount.findAll(note).singleOrNull()?.let {
                     add(ExtractionField("掉落件数", it.groupValues[1].trim()))
                 }
             }
@@ -116,8 +122,7 @@ internal object ExtractionDropParser {
             fields = fields, tags = listOf(badge, content(card.selectFirst(".sec-drop-card__grade"))).filter { it.isNotBlank() },
             type = ExtractionEntryType.DROP_SOURCE,
             dropCountState = dropCountState(fields.singleOrNull { it.label == "掉落件数" }?.value.orEmpty()),
-            containerId = Regex("""晶骸(?:容器|核心)\s+(\d+)""")
-                .findAll(content(card.selectFirst(".sec-drop-card__foot"))).map { it.groupValues[1] }
+            containerId = crystalContainerId.findAll(content(card.selectFirst(".sec-drop-card__foot"))).map { it.groupValues[1] }
                 .distinct().toList().singleOrNull(),
             dropImages = card.select(".sec-drop-card__list li, .sec-drop-card__must li")
                 .mapNotNull(::parseWeightedItemImage).distinct()
@@ -142,7 +147,7 @@ internal object ExtractionDropParser {
                 if (label != null) issues += "shared-pool $name: group without items"
                 label = content(element.selectFirst(".sec-drop-pool__tag")).ifBlank { null }
                 val declared = element.selectFirst(".sec-drop-pool__cnt")
-                expectedCount = count(content(declared))
+                expectedCount = declaredPoolItemCount(content(declared))
                 if (declared != null && expectedCount == null) issues += "shared-pool $name: invalid group count"
                 if (label == null) issues += "shared-pool $name: missing group label"
             } else {
@@ -165,7 +170,7 @@ internal object ExtractionDropParser {
             }
         }
         if (label != null) issues += "shared-pool $name: group without items"
-        val declaredCount = count(content(heading?.selectFirst("b")))
+        val declaredCount = declaredPoolItemCount(content(heading?.selectFirst("b")))
         if (heading?.selectFirst("b") != null && declaredCount == null) issues += "shared-pool $name: invalid total count"
         if ((groups.isEmpty() && declaredCount != 0) || (declaredCount != null && declaredCount != groups.sumOf { it.items.size })) {
             issues += "shared-pool $name: total count mismatch"
@@ -182,16 +187,14 @@ internal object ExtractionDropParser {
         )
     }
 
-    private fun count(value: String): Int? = Regex("""^(\d+)\s*项$""").matchEntire(value)?.groupValues?.get(1)?.toIntOrNull()
-
     /** The snapshot binds each icon to a single weighted list row; alt is a filename, not an item name. */
     private fun parseWeightedItemImage(row: Element): ExtractionDropImage? {
         if (row.select("li").any { it !== row }) return null
         val url = itemImageUrl(row) ?: return null
         val text = row.text().trim()
-        val weighted = Regex("""^(.+?)\s*·\s*\d+(?:\.\d+)?%$""").matchEntire(text) ?: return null
+        val weighted = weightedItemRow.matchEntire(text) ?: return null
         val rawName = weighted.groupValues[1].trim()
-        val quality = Regex("""^(.+?)（([★]{1,5})\s*(优秀|精致|卓越|完美|臻藏)）$""").matchEntire(rawName)
+        val quality = starredItemQuality.matchEntire(rawName)
         val name = quality?.groupValues?.get(1)?.trim() ?: rawName
         // Unknown annotations or multiple inline items are not a reliable name binding.
         if (name.isBlank() || name.any { it in "（）×｜" }) return null

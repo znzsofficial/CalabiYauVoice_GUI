@@ -3,7 +3,10 @@ package com.nekolaska.calabiyau.feature.wiki.activity.source
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.WikiArticleLoader
+import com.nekolaska.calabiyau.core.wiki.WikiArticleRequest
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
+import com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityDetailParser
 import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -21,6 +24,14 @@ object ActivityRemoteSource {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val PAGE_NAME = "活动"
+
+    internal suspend fun readDetail(title: String, forceRefresh: Boolean, cacheOnly: Boolean, load: WikiArticleLoader) =
+        WikiParseSource.readArticle(WikiArticleRequest(title, OfflineCache.Type.ACTIVITIES, "activity_detail:$title",
+            forceRefresh, cacheOnly), load) { wikitext, html ->
+            // The paired fields come from one action=parse response, after readArticle checked parse.title.
+            // A headerless summary needs both; never combine an old HTML cache with a new source fetch.
+            if (html == null) null else ActivityDetailParser.parse(html, title, wikitext).ifEmpty { null }
+        }
 
     suspend fun fetchActivitiesPage(forceRefresh: Boolean): ActivityPageSourceResult? {
         val result = WikiParseSource.fetchHtml(

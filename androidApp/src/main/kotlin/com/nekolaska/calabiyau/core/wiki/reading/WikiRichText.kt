@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.core.wiki.reading
 
+import com.nekolaska.calabiyau.core.wiki.collapseWikiWhitespace
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
@@ -20,7 +21,7 @@ object WikiRichTextParser {
             if (text.isNotEmpty()) spans += GuideSpan(text, bold, url)
         }
         fun walk(node: Node, bold: Boolean = false, url: String? = null) {
-            if (node is TextNode) { add(node.wholeText.replace(Regex("\\s+"), " "), bold, url); return }
+            if (node is TextNode) { add(node.wholeText.collapseWikiWhitespace(), bold, url); return }
             if (node !is Element) return
             if (node.tagName() in setOf("script", "style", "img") || node.hasClass("smwtticon")) return
             if (node.tagName() == "br") { add("\n", bold, url); return }

@@ -1,7 +1,12 @@
 package com.nekolaska.calabiyau.core.wiki
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.cache.fetchValidatedCachePayload
+import com.nekolaska.calabiyau.core.network.NetworkMonitor
 import data.SharedJson
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import util.buildParseUrl
@@ -15,8 +20,61 @@ data class WikiParseSourceResult(
 
 internal class UnusableWikiHtml(page: String) : IllegalStateException("${page}页面内容不完整")
 
+internal data class WikiArticleRequest(
+    val page: String, val type: OfflineCache.Type, val key: String, val force: Boolean, val cacheOnly: Boolean
+)
+internal data class WikiArticleSnapshot<T>(val value: T, val isFromCache: Boolean, val ageMs: Long)
+internal typealias WikiArticleLoader = suspend (WikiArticleRequest, (raw: String, fromDisk: Boolean) -> Boolean) -> OfflineCache.CacheResult?
+
 object WikiParseSource {
     private const val API = "https://wiki.biligame.com/klbq/api.php"
+
+    /** These readers need two views of one revision. Only disk may contain their older single-view format. */
+    internal suspend fun <T : Any> readArticle(
+        request: WikiArticleRequest, load: WikiArticleLoader,
+        parse: (wikitext: String?, html: String?) -> T?
+    ): WikiArticleSnapshot<T>? {
+        var memo: Pair<String, T>? = null
+        fun decode(raw: String, disk: Boolean): T? {
+            val source = parsePayload(raw, disk, 0, expectedTitle = request.page) ?: return null
+            if (!disk && (source.html.isNullOrBlank() || source.wikitext.isNullOrBlank())) return null
+            return try { parse(source.wikitext, source.html) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { null }
+        }
+        val result = load(request) { raw, disk ->
+            decode(raw, disk)?.also { memo = raw to it } != null
+        } ?: return null
+        // A single-flight follower has not necessarily seen the winning response.
+        val value = memo?.takeIf { it.first == result.payload }?.second ?: decode(result.payload, result.isFromCache)
+            ?: throw UnusableWikiHtml(request.page)
+        return WikiArticleSnapshot(value, result.isFromCache, result.ageMs)
+    }
+
+    internal suspend fun loadArticle(request: WikiArticleRequest, valid: (String, Boolean) -> Boolean): OfflineCache.CacheResult? {
+        val (page, type, key, force, cacheOnly) = request
+        suspend fun disk() = OfflineCache.getEntry(type, key)?.let { OfflineCache.CacheResult(it.content, true, it.ageMs) }
+        if (cacheOnly) return disk()?.also { if (!valid(it.payload, true)) throw UnusableWikiHtml(page) }
+        return OfflineCache.fetchWithPolicy(type, key, force, { valid(it, true) }) { ticket ->
+            val route = OfflineCache.defaultRoute()
+            fetchArticlePayload(page, valid, route == NetworkMonitor.Route.VALIDATED, route == NetworkMonitor.Route.UNVALIDATED,
+                network = { WikiEngine.safeGet(buildParseUrl(API, page, "wikitext|text")) }, read = ::disk,
+                publish = { OfflineCache.put(ticket, it) })
+        }
+    }
+
+    internal suspend fun fetchArticlePayload(
+        page: String, valid: (String, Boolean) -> Boolean, online: Boolean, tryNetworkOnMiss: Boolean,
+        network: suspend () -> String?, read: suspend () -> OfflineCache.CacheResult?, publish: suspend (String) -> Unit
+    ): OfflineCache.CacheResult? {
+        var rejected = false
+        fun accepted(raw: String, disk: Boolean) = valid(raw, disk).also { if (!it) rejected = true }
+        return fetchValidatedCachePayload(online,
+            network = { network()?.takeIf { accepted(it, false) } },
+            read = { read()?.takeIf { accepted(it.payload, true) } },
+            publish = { currentCoroutineContext().ensureActive(); publish(it) }, validate = { true }, tryNetworkOnMiss = tryNetworkOnMiss
+        ) ?: if (rejected) throw UnusableWikiHtml(page) else null
+    }
 
     suspend fun fetchHtml(
         pageName: String,
@@ -100,15 +158,19 @@ object WikiParseSource {
     private fun parsePayload(
         payload: String,
         isFromCache: Boolean,
-        ageMs: Long
+        ageMs: Long,
+        expectedTitle: String? = null
     ): WikiParseSourceResult? {
         val root = runCatching { SharedJson.parseToJsonElement(payload) as? JsonObject }.getOrNull() ?: return null
         if (root["error"] != null) return null
         val parse = root["parse"] as? JsonObject ?: return null
+        if (expectedTitle != null && (parse["title"] as? JsonPrimitive)?.content != expectedTitle) return null
         fun text(key: String): String? = ((parse[key] as? JsonObject)?.get("*") as? JsonPrimitive)
             ?.takeIf { it.isString }?.content
         val html = text("text")
         val wikitext = text("wikitext")
+        // A present but malformed property is never a legacy single-view response.
+        if (expectedTitle != null && (("text" in parse && html == null) || ("wikitext" in parse && wikitext == null))) return null
         if (html == null && wikitext == null) return null
 
         return WikiParseSourceResult(

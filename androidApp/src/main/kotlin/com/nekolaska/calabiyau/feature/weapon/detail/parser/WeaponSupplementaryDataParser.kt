@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.weapon.detail.parser
 
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataValue
 import org.jsoup.Jsoup
@@ -108,7 +109,7 @@ internal object WeaponSupplementaryDataParser {
         val level = heading.tagName().drop(1).toInt()
         return generateSequence(heading.nextElementSibling()) { it.nextElementSibling() }
             .takeWhile { sibling ->
-                val otherLevel = sibling.tagName().takeIf { it.matches(Regex("h[1-6]")) }?.drop(1)?.toInt()
+                val otherLevel = sibling.htmlHeadingLevel()
                 otherLevel == null || otherLevel > level
             }.toList()
     }

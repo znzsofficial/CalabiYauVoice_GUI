@@ -170,19 +170,22 @@ fun formBodyOf(vararg pairs: Pair<String, String>): FormBody {
 }
 
 /**
- * 构造带查询参数的 URL，所有参数经过 URL 编码。
+ * 构造带查询参数的 URL，按传入顺序编码。null 省略该参数，空字符串保留为 `key=`。
  *
  * ```kotlin
  * buildWikiUrl("https://example/api.php", "action" to "query", "format" to "json")
  * // → "https://example/api.php?action=query&format=json"
  * ```
  */
-fun buildWikiUrl(base: String, vararg params: Pair<String, String>): String {
-    if (params.isEmpty()) return base
-    val query = params.joinToString("&") { (k, v) ->
-        "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
+fun buildWikiUrl(base: String, vararg params: Pair<String, String?>): String = buildString {
+    append(base)
+    for ((key, value) in params) {
+        if (value == null) continue
+        append(if (length == base.length) '?' else '&')
+        append(URLEncoder.encode(key, "UTF-8"))
+        append('=')
+        append(URLEncoder.encode(value, "UTF-8"))
     }
-    return "$base?$query"
 }
 
 /**

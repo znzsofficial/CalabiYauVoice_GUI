@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 
 private data class DecorationEntryUi(val key: String, val item: DecorationItem)
 private data class DecorationGroupUi(val key: String, val title: String, val entries: List<DecorationEntryUi>)
+private val keywordSeparator = Regex("""\s+""")
 
 /** A searchable catalog. Data source choices stay in the API; all entries retain their original groups. */
 @Composable
@@ -64,7 +65,7 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
         }
     }
     val filtered = remember(groups, query, effectiveCategory) {
-        val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
+        val terms = query.trim().split(keywordSeparator).filter(String::isNotBlank)
         groups.filter { effectiveCategory == null || it.key == effectiveCategory }.mapNotNull { group ->
             val entries = group.entries.filter { entry ->
                 val item = entry.item

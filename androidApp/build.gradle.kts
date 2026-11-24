@@ -47,6 +47,8 @@ dependencies {
 
     testImplementation(libs.kotlin.testJunit)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.testExt.junit)
+    androidTestImplementation(libs.androidx.testRunner)
 }
 
 android {
@@ -58,8 +60,9 @@ android {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 67
-        versionName = "2.3.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 68
+        versionName = "2.3.1"
     }
 
     val localProps = Properties()

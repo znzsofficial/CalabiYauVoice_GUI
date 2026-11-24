@@ -8,6 +8,8 @@ import org.jsoup.nodes.Element
 internal object WorkshopParser {
     private val sectionTitles = setOf("舱室总览", "建造配方", "舱室升级", "派驻角色", "装修与收藏")
     private val decorationTitles = setOf("家具", "套装", "赛季珍藏品")
+    private val publishedRoomCount = Regex("""共\s*(\d+)\s*个?\s*舱室""")
+    private val publishedPieceCount = Regex("""共\s*(\d+)\s*件""")
 
     fun parse(html: String, wikitext: String): WorkshopPage {
         val root = Jsoup.parse(html, "https://wiki.biligame.com/klbq/").select(".mw-parser-output").singleOrNull()
@@ -21,7 +23,7 @@ internal object WorkshopParser {
         val roomCards = overview.cards().map { it.card(requiredDetails = true) }
         val roomNames = roomCards.map { it.name }.toSet()
         verifyWorkshop(roomNames.size == roomCards.size, "舱室重复")
-        checkCount(overview, "个?\\s*舱室", roomNames.size, required = true)
+        checkCount(overview, publishedRoomCount, roomNames.size, required = true)
 
         val (recipeIntro, stations) = byTitle.getValue("建造配方").split("h3")
         verifyWorkshop(stations.isNotEmpty() && stations.all { it.title in roomNames }, "配方舱室不完整")
@@ -57,7 +59,7 @@ internal object WorkshopParser {
         val decorations = groups.map { section ->
             val cards = section.cards().map { it.card() }
             verifyWorkshop(cards.distinctBy { it.name }.size == cards.size, "${section.title} 条目重复")
-            checkCount(section, "件", cards.size, required = section.title != "套装")
+            checkCount(section, publishedPieceCount, cards.size, required = section.title != "套装")
             DecorationGroup(section.title, section.requiredNotes(), cards)
         }
 
@@ -73,8 +75,8 @@ internal object WorkshopParser {
 
     private fun WorkshopSection.requiredNotes() = notes().ifBlank { broken("$title 缺少说明") }
 
-    private fun checkCount(section: WorkshopSection, unit: String, actual: Int, required: Boolean) {
-        val counts = Regex("共\\s*(\\d+)\\s*$unit").findAll(section.notes()).map { it.groupValues[1].toIntOrNull() }.toList()
+    private fun checkCount(section: WorkshopSection, declaration: Regex, actual: Int, required: Boolean) {
+        val counts = declaration.findAll(section.notes()).map { it.groupValues[1].toIntOrNull() }.toList()
         verifyWorkshop((!required || counts.isNotEmpty()) && counts.all { it == actual }, "${section.title} 的公布数量与条目不符")
     }
 

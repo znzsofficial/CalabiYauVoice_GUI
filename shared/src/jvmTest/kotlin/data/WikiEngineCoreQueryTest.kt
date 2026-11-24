@@ -11,6 +11,22 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class WikiEngineCoreQueryTest {
     @Test
+    fun categoryPaginationOmitsTheInitialCursorAndEncodesTheNextOneExactlyOnce() = runBlocking {
+        val requests = mutableListOf<String>()
+        val rows = WikiEngineCore.fetchPagedCategoryMembers("Category:分页", 14, "subcat", { url ->
+            requests += url
+            when (requests.size) {
+                1 -> """{"query":{"categorymembers":[{"ns":14,"title":"甲"}]},"continue":{"cmcontinue":"x+ y|&"}}"""
+                2 -> """{"query":{"categorymembers":[{"ns":14,"title":"乙"}]}}"""
+                else -> error("Unexpected extra request: $url")
+            }
+        }, SharedJson)
+        assertEquals(listOf("甲", "乙"), rows)
+        assertTrue("cmcontinue" !in requests.first())
+        assertEquals(requests.first() + "&cmcontinue=x%2B+y%7C%26", requests.last())
+    }
+
+    @Test
     fun apiErrorJsonIsNotAnEmptyCategoryAndDoesNotPoisonNameCache() = runBlocking {
         for (body in listOf("""{"error":{"code":"maxlag","info":"busy"}}""", "{}", "not json")) {
             assertFailsWith<WikiQueryFailure> {

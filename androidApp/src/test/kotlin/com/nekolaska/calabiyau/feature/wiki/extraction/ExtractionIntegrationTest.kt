@@ -16,6 +16,8 @@ import com.nekolaska.calabiyau.feature.wiki.hub.extractionGuideLinks
 import com.nekolaska.calabiyau.feature.wiki.hub.matchingHubEntries
 import com.nekolaska.calabiyau.feature.wiki.hub.nativeWikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.toWikiRoute
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_MAP
+import com.nekolaska.calabiyau.feature.wiki.map.model.RIFT_WIDGET_LABEL
 import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CancellationException
@@ -110,12 +112,12 @@ class ExtractionIntegrationTest {
         )) assertEquals(expected, matchingHubEntries(query).firstOrNull()?.targetRoute, query)
     }
 
-    @Test fun topicDirectoryOpensNativeArticlesWithTheRawDropTableStillOnTheWeb() {
+    @Test fun topicDirectoryRoutesNativeArticlesAndLeavesTheInteractiveWidgetAndRawTableOnTheWeb() {
         val links = extractionEquipmentLinks + extractionGuideLinks
-        assertEquals(listOf("掉落表格"), links.filter { it.route == null }.map { it.label })
+        assertEquals(listOf(RIFT_WIDGET_LABEL, "掉落表格"), links.filter { it.route == null }.map { it.label })
         assertEquals(setOf(WikiRoute.ExtractionGuns, WikiRoute.ExtractionArmor, WikiRoute.ExtractionWorkshop,
             WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT), WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS),
-            WikiRoute.ExtractionMode), links.mapNotNull { it.route }.toSet())
+            WikiRoute.ExtractionMode, WikiRoute.MapDetail(RIFT_MAP, null)), links.mapNotNull { it.route }.toSet())
         for (link in links) {
             val uri = URI(link.originalUrl)
             assertEquals("https", uri.scheme)
@@ -126,7 +128,9 @@ class ExtractionIntegrationTest {
             assertNull(uri.rawFragment)
             assertEquals(link.route, nativeWikiRoute(link.originalUrl))
             assertNull(nativeWikiRoute("${link.originalUrl}?action=edit"))
-            link.route?.let { assertEquals(it, decodeRoute(it.encode())) }
+            // Article routing above also covers MapDetail. Its saved-state codec uses Android Uri;
+            // the fixed extraction route tokens can additionally round-trip on the plain JVM.
+            link.route?.takeUnless { it is WikiRoute.MapDetail }?.let { assertEquals(it, decodeRoute(it.encode())) }
         }
     }
 

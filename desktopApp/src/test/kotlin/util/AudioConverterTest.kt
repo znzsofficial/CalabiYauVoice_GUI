@@ -107,6 +107,24 @@ class AudioConverterTest {
     }
 
     @Test
+    fun mergeSkipsGeneratedNamesOnlyInTheOutputDirectory() = withTempDir("audio-merge-filter") { root ->
+        val dir = File(root, "录音[1]+").apply { mkdir() }
+        val generated = File(dir, "录音[1]+_MERGED_1 (2).WAV").apply { writeText("existing output") }
+        val nested = File(dir, "nested").apply { mkdir() }
+        val nestedSource = writeMonoWav(File(nested, generated.name), byteArrayOf(1, 0))
+        val similarSource = writeMonoWav(File(dir, "录音11_merged.wav"), byteArrayOf(2, 0))
+
+        val outputs = runBlocking {
+            mergeWavFiles(dir = dir, sourceFiles = listOf(generated, nestedSource, similarSource))
+        }
+
+        AudioSystem.getAudioInputStream(outputs.single()).use { merged ->
+            assertContentEquals(byteArrayOf(1, 0, 2, 0), merged.readAllBytes())
+        }
+        assertEquals("existing output", generated.readText())
+    }
+
+    @Test
     fun successfulRerunDoesNotOverwriteExistingMergedOutput() = withTempDir("audio-merge-collision") { dir ->
         val source = writeMonoWav(File(dir, "source.wav"), byteArrayOf(1, 0))
         val existingOutput = File(dir, "${dir.name}_merged.wav").apply { writeText("existing") }

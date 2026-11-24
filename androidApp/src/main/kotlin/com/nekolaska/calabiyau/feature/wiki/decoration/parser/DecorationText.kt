@@ -7,6 +7,8 @@ import org.jsoup.nodes.TextNode
 
 /** Readable markup shared by both sources; struck prices must never look like current offers. */
 internal object DecorationText {
+    private val wikiLink = Regex("""\[\[([^\]\n]+)\]\]""")
+    private val externalLink = Regex("""\[(https?://\S+)\s+([^\]]+)\]""")
     fun read(element: Element?): String = element?.html()?.let(::read).orEmpty()
 
     fun description(element: Element?): String = element?.html()?.let { parse(it, true, false) }.orEmpty()
@@ -16,9 +18,9 @@ internal object DecorationText {
     fun description(raw: String): String = parse(raw, true)
 
     private fun parse(raw: String, keepLines: Boolean, literalLines: Boolean = keepLines): String {
-        val wiki = raw.replace(Regex("\\[\\[([^]\\n]+)]]")) {
+        val wiki = raw.replace(wikiLink) {
             it.groupValues[1].substringAfterLast('|').substringBefore('#')
-        }.replace(Regex("\\[(https?://\\S+)\\s+([^]]+)]"), "$2")
+        }.replace(externalLink, "$2")
             .replace("'''", "").replace("''", "")
         val body = Jsoup.parseBodyFragment(wiki).body()
         body.select("del, s, strike").reversed().forEach { deleted ->

@@ -69,6 +69,8 @@ private val RAW_CHARACTER_SUFFIXES = listOf("角色立绘", "立绘", "初始", 
 private const val PREVIEW_PREFIX_TOKEN = "时装"
 private val SEPARATOR_REGEX = Regex("[\\s_\\-·•]+")
 private val WHITESPACE_REGEX = Regex("\\s+")
+private val FILE_EXTENSION_REGEX = Regex("\\.[^.]+$")
+private val KEY_SEPARATOR_REGEX = Regex("[\\s_\\-·•()（）\\[\\]【】]+")
 private const val DEFAULT_COSTUME_NAME = "默认时装"
 
 // === 核心解析函数 ===
@@ -209,8 +211,8 @@ private fun isDefaultCostumeName(name: String): Boolean =
     name == DEFAULT_COSTUME_NAME || DEFAULT_COSTUME_KEYWORDS.any { name == it }
 
 fun normalizePortraitKey(value: String): String = value
-    .replace(Regex("\\.[^.]+$"), "")
-    .replace(Regex("[\\s_\\-·•()（）\\[\\]【】]+"), "")
+    .replace(FILE_EXTENSION_REGEX, "")
+    .replace(KEY_SEPARATOR_REGEX, "")
     .lowercase()
 
 fun extractPortraitCharacterName(fileName: String): String? {

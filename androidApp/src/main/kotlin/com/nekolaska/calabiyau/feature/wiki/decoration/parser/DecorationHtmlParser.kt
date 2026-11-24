@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration.parser
 
+import com.nekolaska.calabiyau.core.wiki.htmlHeadingLevel
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationImageFile
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.RawDecorationItem
@@ -21,6 +22,7 @@ internal data class DecorationHtmlParseResult(
 
 /** Rendered directory parser for complex catalogs and the simple catalogs' compatibility fallback. */
 internal object DecorationHtmlParser {
+    private val imageFile = Regex("""[^/\\:#?\r\n]+\.(?i:png|jpe?g|gif|webp|svg|avif)""")
     private val idFromFile = Regex("""[\s_](\d+)""")
     private const val cards = ".gallerygrid-item, li.gallerybox, .roomgrid, .roomgrid-item"
 
@@ -50,7 +52,7 @@ internal object DecorationHtmlParser {
         }
         root.select("h1, h2, h3, h4, h5, h6, $cards").forEach { element ->
             if (element.parents().any(::isCard)) return@forEach
-            if (element.tagName().matches(Regex("h[1-6]"))) {
+            if (element.htmlHeadingLevel() != null) {
                 val heading = element.selectFirst(".mw-headline") ?: return@forEach
                 flush()
                 val level = element.tagName().last().digitToInt()
@@ -170,9 +172,7 @@ internal object DecorationHtmlParser {
         return files.singleOrNull()?.let { DecorationImageFile(it) }
     }
 
-    private fun validFile(value: String): String? = value.trim().takeIf {
-        it.matches(Regex("""[^/\\:#?\r\n]+\.(?i:png|jpe?g|gif|webp|svg|avif)"""))
-    }
+    private fun validFile(value: String): String? = value.trim().takeIf(imageFile::matches)
 
     private fun namespaceFile(title: String): String? = when {
         title.startsWith("文件:") -> validFile(title.removePrefix("文件:"))

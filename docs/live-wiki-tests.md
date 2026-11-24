@@ -21,6 +21,11 @@
 | `WIKI_LIST_AUDIT_DIR` | 角色、武器、地图列表 | [列表审计](wiki-list-resilience.md) |
 | `EXTRACTION_AUDIT_DIR`、`EXTRACTION_DROPS_AUDIT_FILE`、`EXTRACTION_CONTAINERS_AUDIT_DIR`、`EXTRACTION_UPDATED_AUDIT_DIR` | 多代弦溯结构 | 各自对应不同上游结构，不相互替代；[专题](extraction-mode-implementation.md) |
 | `EXTRACTION_SPLIT_AUDIT_DIR` | 11 月 21 日晚的弦溯物资、配件、装备和工坊 | 新旧物资入口与配件 Q8 使用迁页快照；同批 `guns`、`armor`、`workshop` 捕获供新栏目的离线验证。工坊保留完整 `.json`（含 HTML 与 wikitext）和 `.html`；不要覆盖白天的基线。 |
+| `EXTRACTION_NOV24_CATALOG_DIR` | 11 月 24 日简写装备价值与新版来源说明 | 解析接口返回的正文分别存为 `guns.html`、`armor.html`、`loot.html`、`attachments.html`；由 `November24CatalogAuditTest` 离线核对，与 11 月 21 日快照共存。 |
+| `WIKI_ACTIVITY_NOV24_AUDIT_DIR` | 「欢迎光临卡邦尼！」活动、奖励获取途径和三份武器增幅资料 | `November24ActivityAuditTest` 对照首页卡片、活动列表、详情、聊天气泡和喷漆；`WeaponDefaultAugmentTest` 核对影袭／雨晦／破晓的同名 `.html` 与 `.txt` 快照。 |
+| `WIKI_ARCHIVED_ACTIVITY_DIR` | 2023–2026 往期活动 | `ArchivedActivityAuditTest` 用 `activity.html` 原生列表逐一匹配目录内 `item-*.json`（含 `parse.title`、`text.*`、`wikitext.*` 的原始响应），通过生产详情 API 重放首开、缓存读回，核对一级章节与原文章节锚点。样本不是固定的线上活动白名单。 |
+| `EXTRACTION_RATES_NOV24_DIR` | 弦溯单件抽中率 | 名称索引、全部八个分片及容器表快照，供 `ExtractionDropRatesNovember24Test` 对照全部名称／品质、百分数与阶段标签。 |
+| `WIKI_MAP_MODE_AUDIT_DIR` | 维里昂地图和模式阅读 | `ExtractionFieldGuideTest` 对照修订 120739／120758／120781／120798 的点位、测试页、原文与渲染表格。 |
 | `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
 | `WIKI_NOV21_AUDIT_DIR` | 11 月 21 日弦溯、指南、伏闪 | 弦溯读 `drops.html`、`table.html`、`loot.html`、`attachments.html`；指南读 `beginner.html`、`review-1121/120474.html`、`review-1121/historical-120474.json`；伏闪优先读 `fushan-current.json`，也可用 `fushan.html` 与 `120510.txt`。 |
 
