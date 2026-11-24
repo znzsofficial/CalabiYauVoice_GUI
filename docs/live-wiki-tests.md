@@ -41,14 +41,13 @@
 
 ```powershell
 $env:LIVE_WIKI_TEST = '1'
-.\gradlew.bat :androidApp:testDebugUnitTest --tests 'com.nekolaska.calabiyau.feature.wiki.LiveWikiSnapshotTest' --rerun-tasks
+.\gradlew.bat :androidApp:testDebugUnitTest --rerun --fail-fast --tests 'com.nekolaska.calabiyau.feature.wiki.LiveWikiSnapshotTest'
 Remove-Item Env:LIVE_WIKI_TEST
 ```
 
-`--rerun-tasks` 避免 Gradle 将上次结果视为最新而跳过联网请求。
-未启用环境变量时，联网用例显示为 skipped，而不是通过。
+每日与手动 CI 都对 `:androidApp:testDebugUnitTest` 使用任务选项 `--rerun`：测试重新执行，编译和依赖仍可使用缓存。未启用环境变量时联网用例会跳过；CI 汇总检查 JUnit 结果及本次抓到的活动详情、防具响应，缺少证据不会标绿。运行摘要显示实际检查的页名与字节数。
 
-实际抓取下方列出的 15 个公开 HTML 页面，校验 HTTP 状态、HTML Content-Type 和 MediaWiki 内容标记。其中 Tips、历史会调用现有 parser 检查解析结果非空；其余 13 个页面仅检查可达性和文档结构，不代表对应 parser 已通过验证。PC/移动端道具图鉴分别经 parse API 获取真实页面并验证字段；武器外观另经 parse API 获取渲染 HTML 并验证 parser。启用的联网检查失败会报错，不回退到缓存。
+普通网页探针检查 14 页的 HTTP 状态、内容类型和 MediaWiki 内容标记。其中 Tips、历史还会调用现有 parser 检查结果非空；其余 12 页仅检查可达性和文档结构。活动列表、装备和道具等走各自的 parse API。启用联网检查时不回退到旧快照。
 
 本次抓取的 HTML 位于 `androidApp/build/live-wiki/`；测试报告位于 `androidApp/build/reports/tests/testDebugUnitTest/`。
 
@@ -71,15 +70,16 @@ Remove-Item Env:LIVE_WIKI_TEST
 
 页面列表与模板渲染检查：
 
-- 普通页面：游戏Tips、游戏历史、成就、活动、BGM、联动、印迹、喵言喵语、梗百科、誓约、玩家等级、剧情故事、投稿作品、好友、战斗模式（15 个）。
+- 普通页面：游戏Tips、游戏历史、成就、BGM、联动、印迹、喵言喵语、梗百科、誓约、玩家等级、剧情故事、投稿作品、好友、战斗模式。
+- 活动：从列表解析出的第一个原生详情入口取得同一修订的源码与 HTML，运行 `ActivityDetailParser`（含奖励表完整性校验），不写死活动名和奖励档数。防具：用 `EquipmentRemoteSource.decode` 校验图鉴的数量、品质、精确价值等字段，并确认有可对比的品质档；不下载图片。
 - 道具页：功能道具图鉴PC端、功能道具图鉴移动端，使用 `action=parse&page=...&prop=text`，分别跑生产 parser。
 - Lua 模板：`{{#invoke:武器|武器外观筛选}}` 经 `action=parse` 渲染后交给 `parseWeaponSkinHtml`；
   另有 `{{#invoke:角色|角色时装筛选}}`（时装筛选）与 `{{游戏地图|一般爆破}}`（地图列表卡片）两个模板的联网解析校验。
-- 端到端（`fetchesAndParsesAnnouncementActivityWeaponWhenEnabled`）：公告 ask 新属性查询、活动卡片解析、
+- 端到端（`fetchesAndParsesAnnouncementsAndWeaponsWhenEnabled`）：公告 ask 新属性查询、
   静风/北极星/大剑/小蜜蜂四类武器详情 wikitext+HTML 解析，全部跑真实 parser 并按武器锁定关键结构
   （静风多使用者、北极星移动端距离行、大剑近战嵌套行、小蜜蜂上肢列），任一解析路径回归都能定位。
 - 角色详情：`CharacterDetailLiveAuditTest` 读取 `build/char-audit/` 下的抓取
   （action=parse&page=<角色名>&prop=wikitext|text，超弦体×2 + 晶源体×1）跑完整 parser
   （`CharacterDetailApi.parseCharacterWikitext`，internal 供测试），
   断言技能/数值组/增幅模式（爆破+极限推进+弦区争夺克隆）/故事条目/声优拆分/定位等。此审计和 `parsesLocalLiveSnapshotsWhenPresent` 都只读本地，缺少相应捕获时跳过。
-- 限流：`fetchBody` 每次请求后强制 6.5 秒间隔（成功与失败路径都等待），四把霰弹枪诊断时以墙钟 187 秒实测生效；新增请求时保持该节奏。遇到 EdgeOne HTTP 567 应停止抓取；同一 IP 的浏览器也可能受限，等数十分钟后再复核，不要连续重试。
+- 限流：每次请求后保留 6.5 秒间隔；遇 HTTP 403／429／567 停止继续请求，该次结果保留失败。仅因拒绝访问或限流而失败时，Actions 摘要说明「未完成兼容性检查」，不自动开解析回归 issue；测试断言等失败仍保留报告并按原规则告警。

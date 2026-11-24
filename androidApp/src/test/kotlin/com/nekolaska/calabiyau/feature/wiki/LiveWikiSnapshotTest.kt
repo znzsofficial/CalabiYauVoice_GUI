@@ -2,9 +2,13 @@ package com.nekolaska.calabiyau.feature.wiki
 
 import com.nekolaska.calabiyau.feature.wiki.achievement.parser.AchievementParsers
 import com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityParsers
+import com.nekolaska.calabiyau.feature.wiki.activity.model.ActivityDetailBlock
+import com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityDetailParser
 import com.nekolaska.calabiyau.feature.wiki.announcement.parser.AnnouncementParsers
 import com.nekolaska.calabiyau.feature.wiki.bgm.parser.BgmParsers
 import com.nekolaska.calabiyau.feature.wiki.collaboration.parser.CollaborationParsers
+import com.nekolaska.calabiyau.feature.wiki.extraction.equipment.EquipmentKind
+import com.nekolaska.calabiyau.feature.wiki.extraction.equipment.source.EquipmentRemoteSource
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
 import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
 import com.nekolaska.calabiyau.feature.wiki.history.parser.GameHistoryParsers
@@ -32,9 +36,14 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.net.HttpURLConnection
 import java.net.URI
+import util.buildParseUrl
 import kotlin.test.assertEquals
 
 class LiveWikiSnapshotTest {
+
+    private companion object {
+        var blockedStatus: Int? = null
+    }
 
     /** Run with LIVE_WIKI_TEST=1 to validate current production HTML, not fixtures. */
     @Test
@@ -44,7 +53,6 @@ class LiveWikiSnapshotTest {
             "tips.html" to "游戏Tips",
             "history.html" to "游戏历史",
             "achievements.html" to "成就",
-            "activity.html" to "活动",
             "bgm.html" to "BGM",
             "collab.html" to "联动",
             "imprints.html" to "印迹",
@@ -133,9 +141,41 @@ class LiveWikiSnapshotTest {
         assertTrue(WeaponSkinFilterApi.parseWeaponSkinHtml(html).isNotEmpty(), "weapon skin parser returned no rows")
     }
 
-    /** Live end-to-end: announcements ask API, activity page, and weapon detail (静风) with renamed templates. */
     @Test
-    fun fetchesAndParsesAnnouncementActivityWeaponWhenEnabled() {
+    fun fetchesAndParsesListedActivityDetailWhenEnabled() {
+        org.junit.Assume.assumeTrue(System.getenv("LIVE_WIKI_TEST") == "1")
+        val api = "https://wiki.biligame.com/klbq/api.php"
+        val listing = fetchBody(buildParseUrl(api, "活动", "text"), json = true)
+        val index = kotlinx.serialization.json.Json.parseToJsonElement(listing).jsonObject.getValue("parse").jsonObject
+        assertEquals("活动", index.getValue("title").jsonPrimitive.content)
+        val html = index.getValue("text").jsonObject.getValue("*").jsonPrimitive.content
+        val dir = Files.createDirectories(Path.of("build/live-wiki"))
+        Files.writeString(dir.resolve("activity.html"), html)
+        val entries = ActivityParsers.parseActivities(html)
+        assertTrue(entries.any { it.entry.title.isNotBlank() && it.entry.startTime.isNotBlank() }, "live activity rows missing title/time")
+        val title = assertNotNull(entries.firstNotNullOfOrNull { it.detailPageTitle }, "活动列表没有可打开的原生详情")
+        val body = fetchBody(buildParseUrl(api, title, "wikitext|text"), json = true)
+        Files.writeString(dir.resolve("activity-detail.json"), body)
+        val page = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject.getValue("parse").jsonObject
+        assertEquals(title, page.getValue("title").jsonPrimitive.content, "活动列表与详情标题不符")
+        val blocks = ActivityDetailParser.parse(page.getValue("text").jsonObject.getValue("*").jsonPrimitive.content,
+            title, page.getValue("wikitext").jsonObject.getValue("*").jsonPrimitive.content)
+        assertTrue(blocks.any { it !is ActivityDetailBlock.Heading }, "活动「$title」无可读正文或章节，或奖励表与同修订源码不符")
+    }
+
+    @Test
+    fun fetchesAndParsesExtractionArmorWhenEnabled() {
+        org.junit.Assume.assumeTrue(System.getenv("LIVE_WIKI_TEST") == "1")
+        val kind = EquipmentKind.ARMOR // Smaller than the firearm catalog; exercises the same value/quality checks.
+        val raw = fetchBody(buildParseUrl("https://wiki.biligame.com/klbq/api.php", kind.pageName, "text"), json = true)
+        Files.writeString(Files.createDirectories(Path.of("build/live-wiki")).resolve("extraction-armor.json"), raw)
+        val armor = EquipmentRemoteSource.decode(kind, raw)
+        assertTrue(armor.series.any { it.variants.size > 1 }, "${kind.pageName} 没有可按品质对比的防具")
+    }
+
+    /** Live end-to-end: announcements ask API and weapon details with renamed templates. */
+    @Test
+    fun fetchesAndParsesAnnouncementsAndWeaponsWhenEnabled() {
         org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
         Files.createDirectories(Paths.get("build/live-wiki"))
 
@@ -151,12 +191,6 @@ class LiveWikiSnapshotTest {
         val announcements = AnnouncementParsers.parseAnnouncements(results)
         assertTrue(announcements.isNotEmpty(), "live announcements returned no rows")
         assertTrue(announcements.first().date.isNotBlank(), "live announcement date blank")
-
-        val activityHtml = fetchHtml("https://wiki.biligame.com/klbq/${encoded("活动")}")
-        val activities = ActivityParsers.parseActivities(activityHtml)
-        assertTrue(activities.isNotEmpty(), "live activities returned no rows")
-        assertTrue(activities.any { it.entry.title.isNotBlank() && it.entry.startTime.isNotBlank() },
-            "live activity rows missing title/time")
 
         val weaponBody = fetchBody(
             "https://wiki.biligame.com/klbq/api.php?action=parse" +
@@ -367,6 +401,8 @@ class LiveWikiSnapshotTest {
     private fun encoded(value: String) = java.net.URLEncoder.encode(value, Charsets.UTF_8)
 
     private fun fetchBody(url: String, json: Boolean = false): String {
+        // JUnit can already have queued the next method when Gradle receives the first failure.
+        blockedStatus?.let { org.junit.Assume.assumeTrue("Stopped live requests after HTTP $it", false) }
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
         connection.connectTimeout = 15_000
         connection.readTimeout = 30_000
@@ -378,7 +414,12 @@ class LiveWikiSnapshotTest {
         )
         connection.setRequestProperty("Referer", "https://wiki.biligame.com/klbq/")
         val result: String = try {
-            assertTrue(connection.responseCode in 200..299, "HTTP ${connection.responseCode} for $url")
+            val status = connection.responseCode
+            if (status == 403 || status == 429 || status == 567) {
+                blockedStatus = status
+                throw WikiAccessLimited("HTTP $status for $url")
+            }
+            assertTrue(status in 200..299, "HTTP $status for $url")
             val expected = if (json) "application/json" else "text/html"
             assertEquals(
                 connection.contentType?.contains(expected, ignoreCase = true),
@@ -397,3 +438,6 @@ class LiveWikiSnapshotTest {
 
     private fun fetchHtml(url: String): String = fetchBody(url)
 }
+
+/** Machine-readable in Gradle's JUnit XML (not a skipped or successful probe). */
+private class WikiAccessLimited(message: String) : AssertionError(message)
