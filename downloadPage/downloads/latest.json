@@ -1,8 +1,8 @@
 {
     "versionName": "2.3.1",
     "versionCode": 68,
-    "apkUrl": "/downloads/CalabiYauVoice-2.3.1.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.3.1.apk?build=2b3bf649e4251a11",
+    "apkSize": 4280484,
     "releaseUrl": "/",
     "changelog": [
         "活动列表新增原生详情，可从目录直达任务、奖励和剧情。大字号下条件与奖品按档排列，从 Wiki 原文返回保留阅读位置。",
@@ -14,6 +14,13 @@
     ],
     "publishedAt": "2026-11-24",
     "releases": [
+        {
+            "versionName": "2.3.1",
+            "versionCode": 68,
+            "apkUrl": "/downloads/CalabiYauVoice-2.3.1.apk?build=2b3bf649e4251a11",
+            "apkSize": 4280484,
+            "publishedAt": "2026-11-24"
+        },
         {
             "versionName": "2.3.0",
             "versionCode": 67,
