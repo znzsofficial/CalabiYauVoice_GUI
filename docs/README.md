@@ -51,7 +51,7 @@
 
 ## 发布记录
 
-当前发布：[Android 2.3.2（69）](releases/2.3.2.md)。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+当前发布：[Android 2.3.2（69）](releases/2.3.2.md)，2026-11-28。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 
 ## 归档与维护口径
 
