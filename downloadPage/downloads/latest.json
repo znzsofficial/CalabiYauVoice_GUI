@@ -1,7 +1,7 @@
 {
-    "versionName": "2.3.1",
-    "versionCode": 68,
-    "apkUrl": "/downloads/CalabiYauVoice-2.3.1.apk?build=2b3bf649e4251a11",
+    "versionName": "2.3.2",
+    "versionCode": 69,
+    "apkUrl": "/downloads/CalabiYauVoice-2.3.2.apk?build=732dce6bafa1d045",
     "apkSize": 4280484,
     "releaseUrl": "/",
     "changelog": [
@@ -12,8 +12,15 @@
         "平衡数据和 PC 游戏设置统一为紧凑的战术风格。统计范围可换行，排序指标和升降序都能直接操作。",
         "对齐武器详情加载前后的图片位置，避免共享动画结束时跳动；伤害表用等宽数字，方便对照。"
     ],
-    "publishedAt": "2026-11-24",
+    "publishedAt": "2026-11-28",
     "releases": [
+        {
+            "versionName": "2.3.2",
+            "versionCode": 69,
+            "apkUrl": "/downloads/CalabiYauVoice-2.3.2.apk?build=732dce6bafa1d045",
+            "apkSize": 4280484,
+            "publishedAt": "2026-11-28"
+        },
         {
             "versionName": "2.3.1",
             "versionCode": 68,
