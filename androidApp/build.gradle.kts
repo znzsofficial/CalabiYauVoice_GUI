@@ -61,8 +61,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 68
-        versionName = "2.3.1"
+        versionCode = 69
+        versionName = "2.3.2"
     }
 
     val localProps = Properties()

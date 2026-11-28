@@ -20,9 +20,9 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExtractionFilterSheet(
-    kind: ExtractionCatalogKind, categories: List<String>, qualities: List<Pair<Int, String>>, sorts: List<ExtractionSort>,
-    category: String?, quality: Int?, valuable: Boolean, sort: ExtractionSort, descending: Boolean,
-    onCategory: (String?) -> Unit, onQuality: (Int?) -> Unit, onValuable: (Boolean) -> Unit,
+    kind: ExtractionCatalogKind, categories: List<String>, qualities: List<Pair<Int, String>>, materialTags: List<String>, sorts: List<ExtractionSort>,
+    category: String?, quality: Int?, materialTag: String?, sort: ExtractionSort, descending: Boolean,
+    onCategory: (String?) -> Unit, onQuality: (Int?) -> Unit, onMaterialTag: (String?) -> Unit,
     onSort: (ExtractionSort) -> Unit, onDescending: (Boolean) -> Unit, onClear: (() -> Unit)?, onDismiss: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -62,10 +62,8 @@ internal fun ExtractionFilterSheet(
                         }
                     }
                 }
-                if (kind == ExtractionCatalogKind.LOOT) item("valuable") {
-                    FilterGroup("特殊标记") {
-                        FilterOption("仅贵重物品", valuable) { onValuable(!valuable) }
-                    }
+                if (kind == ExtractionCatalogKind.LOOT && materialTags.isNotEmpty()) item("materialTags") {
+                    MaterialTagFilter(materialTags, materialTag, onMaterialTag)
                 }
                 if (sorts.size > 1) item("sort") {
                     FilterGroup("排序") {
@@ -97,6 +95,14 @@ internal fun ExtractionFilterSheet(
                 ) { Text("完成") }
             }
         }
+    }
+}
+
+@Composable
+internal fun MaterialTagFilter(options: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    FilterGroup("材料标签") {
+        FilterOption("全部标签", selected == null) { onSelect(null) }
+        options.forEach { tag -> FilterOption(tag, selected == tag) { onSelect(if (selected == tag) null else tag) } }
     }
 }
 

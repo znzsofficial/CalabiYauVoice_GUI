@@ -4,10 +4,14 @@ import com.nekolaska.calabiyau.core.wiki.ArticlePublicationFixture
 import com.nekolaska.calabiyau.core.wiki.articlePayload
 import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.FieldGuideBlock
+import com.nekolaska.calabiyau.feature.wiki.game.model.sections
+import data.SharedJson
 import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.junit.Assume.assumeNotNull
 import java.io.File
@@ -66,6 +70,57 @@ class ExtractionModePublicationTest {
         assertEquals(cached, read(store)); assertEquals(legacy, store.disk)
         assertFailsWith<CancellationException> { GameModeApi.fetchFromSource(focusedMode = mode, load = { _, _ -> throw CancellationException() }) }
         Unit
+    }
+
+    @Test fun chapterRenameCannotSilentlyPublishOnlyThePreviouslyKnownTitles() = runBlocking {
+        val titles = listOf("玩家等级", "角色等级", "角色天赋", "任务", "局内事件", "新玩法")
+        val wt = titles.joinToString("\n") { "== $it ==\n说明。" }
+        fun html(chapters: List<String>) = chapters.joinToString("", "<div class='mw-parser-output'>", "</div>") {
+            "<h2><span class='mw-headline'>$it</span></h2><p>说明。</p>"
+        }
+        val full = payload(wt, html(titles))
+        val store = ArticlePublicationFixture(full)
+        val fresh = read(store)
+        assertTrue(fresh is ApiResult.Success && !fresh.isOffline)
+        assertEquals(titles, fresh.value.single().chapters.map { it.title })
+        store.response = payload(wt, html(listOf("角色天赋", "局内事件")))
+        val fallback = read(store)
+        assertTrue(fallback is ApiResult.Success && fallback.isOffline && fallback.cacheAgeMs == 123L)
+        assertEquals(full, store.disk)
+        store.disk = null
+        assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(read(store)).kind)
+    }
+
+    @Test fun revision121029ReadsTheFiveChaptersAndBothBranchesFromDiskAndNetwork() = runBlocking {
+        val path = System.getenv("WIKI_MODE_NOV27_AUDIT_FILE")
+        assumeNotNull(path)
+        val full = File(path!!).readText()
+        val store = ArticlePublicationFixture(full)
+        val fresh = read(store)
+        assertTrue(fresh is ApiResult.Success && !fresh.isOffline)
+        val chapters = fresh.value.single().chapters
+        assertEquals(listOf("玩家等级", "角色等级", "角色天赋", "任务", "局内事件"), chapters.map { it.title })
+        assertEquals(listOf(54, 19, 10, 52, 18), chapters.map { c -> c.blocks.count { it.kind == FieldGuideBlock.Kind.RECORD } })
+        assertTrue(chapters[0].blocks.any { "等级：Lv50" in it.content.text && "累计经验：9000" in it.content.text })
+        assertTrue(chapters[2].blocks.any { "解锁等级：Lv18" in it.content.text && "附加前置：\n• 生存等级 1\n• 工坊等级 1" in it.content.text })
+        val tasks = chapters[3]
+        val battle = tasks.sections().single { it.label == "战斗线任务" }
+        val rows = battle.blocks.map { tasks.blocks[it] }.filter { it.kind == FieldGuideBlock.Kind.RECORD }
+        assertEquals(12, rows.size)
+        for (id in listOf("4-1", "4-2")) assertTrue(rows.any { "序号：$id\n" in it.content.text && "支链" in it.content.text })
+        val cached = read(store, diskOnly = true)
+        assertTrue(cached is ApiResult.Success && cached.isOffline)
+        assertEquals(chapters, cached.value.single().chapters)
+
+        val page = SharedJson.parseToJsonElement(full).jsonObject.getValue("parse").jsonObject
+        val wt = page.getValue("wikitext").jsonObject.getValue("*").jsonPrimitive.content
+        val doc = Jsoup.parse(page.getValue("text").jsonObject.getValue("*").jsonPrimitive.content)
+        doc.getElementById("玩家等级")!!.parent()!!.nextElementSiblings().first { it.tagName() == "table" }
+            .selectFirst("tr:has(td)")!!.remove()
+        store.response = payload(wt, doc.outerHtml())
+        val fallback = read(store)
+        assertTrue(fallback is ApiResult.Success && fallback.isOffline)
+        assertEquals(full, store.disk)
     }
 
     @Test fun captured120798LosingEveryChapterOrOneTableRowRetainsTheFullRevision() = runBlocking {

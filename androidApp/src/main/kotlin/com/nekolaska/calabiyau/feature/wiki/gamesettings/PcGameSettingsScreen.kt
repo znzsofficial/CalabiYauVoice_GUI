@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
-import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
@@ -55,6 +54,7 @@ import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.retainedWikiPageError
@@ -154,19 +154,23 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                             PcSettingsView.KNOWLEDGE -> "搜索 DX12、DLSS…"
                         }
                     )
-                    FilledTonalIconButton(
+                    Surface(
                         onClick = { keyboard?.hide(); showSections = true },
                         enabled = sections.isNotEmpty(),
                         modifier = Modifier.size(48.dp),
-                        shape = AppShapes.compactCard,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (effectiveSectionId.isNotEmpty())
-                                MaterialTheme.colorScheme.secondaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
+                        shape = TacticalStyle.iconFrameShape,
+                        color = if (effectiveSectionId.isNotEmpty())
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = if (effectiveSectionId.isNotEmpty())
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurface,
+                        border = TacticalStyle.cardBorder(highlighted = effectiveSectionId.isNotEmpty())
                     ) {
-                        BadgedBox(badge = { if (effectiveSectionId.isNotEmpty()) Badge() }) {
-                            Icon(Icons.Outlined.Tune, contentDescription = "筛选分类，当前$categoryTitle")
+                        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                            BadgedBox(badge = { if (effectiveSectionId.isNotEmpty()) Badge() }) {
+                                Icon(Icons.Outlined.Tune, contentDescription = "筛选分类，当前$categoryTitle")
+                            }
                         }
                     }
                 }
@@ -179,7 +183,7 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(), state = listState,
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         item(key = "source-note") { listHeader() }
                         if (visible.isEmpty()) item(key = "empty") {

@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.FlowRow
@@ -33,6 +32,7 @@ import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 
@@ -55,9 +55,9 @@ internal fun ExtractionCatalogSkeleton(kind: ExtractionCatalogKind, modifier: Mo
         items(12, key = { "extraction-grid-skeleton-$it" }) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = smoothCornerShape(12.dp),
+                shape = TacticalStyle.compactCardShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                border = TacticalStyle.cardBorder()
             ) {
                 ExtractionItemImageHeader(
                     accent = MaterialTheme.colorScheme.outlineVariant,

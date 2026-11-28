@@ -22,10 +22,13 @@
 | `EXTRACTION_AUDIT_DIR`、`EXTRACTION_DROPS_AUDIT_FILE`、`EXTRACTION_CONTAINERS_AUDIT_DIR`、`EXTRACTION_UPDATED_AUDIT_DIR` | 多代弦溯结构 | 各自对应不同上游结构，不相互替代；[专题](extraction-mode-implementation.md) |
 | `EXTRACTION_SPLIT_AUDIT_DIR` | 11 月 21 日晚的弦溯物资、配件、装备和工坊 | 新旧物资入口与配件 Q8 使用迁页快照；同批 `guns`、`armor`、`workshop` 捕获供新栏目的离线验证。工坊保留完整 `.json`（含 HTML 与 wikitext）和 `.html`；不要覆盖白天的基线。 |
 | `EXTRACTION_NOV24_CATALOG_DIR` | 11 月 24 日简写装备价值与新版来源说明 | 解析接口返回的正文分别存为 `guns.html`、`armor.html`、`loot.html`、`attachments.html`；由 `November24CatalogAuditTest` 离线核对，与 11 月 21 日快照共存。 |
+| `EXTRACTION_NOV26_CATALOG_DIR` | 11 月 26 日弦溯物资材料标签 | 同时设置前一行的 11 月 24 日目录；`ExtractionMaterialTagsTest` 读取两个目录各自的 `loot.html`，按 ID 对照材料标签并核对「精致＋能量」及贵重物品。 |
 | `WIKI_ACTIVITY_NOV24_AUDIT_DIR` | 「欢迎光临卡邦尼！」活动、奖励获取途径和三份武器增幅资料 | `November24ActivityAuditTest` 对照首页卡片、活动列表、详情、聊天气泡和喷漆；`WeaponDefaultAugmentTest` 核对影袭／雨晦／破晓的同名 `.html` 与 `.txt` 快照。 |
 | `WIKI_ARCHIVED_ACTIVITY_DIR` | 2023–2026 往期活动 | `ArchivedActivityAuditTest` 用 `activity.html` 原生列表逐一匹配目录内 `item-*.json`（含 `parse.title`、`text.*`、`wikitext.*` 的原始响应），通过生产详情 API 重放首开、缓存读回，核对一级章节与原文章节锚点。样本不是固定的线上活动白名单。 |
 | `EXTRACTION_RATES_NOV24_DIR` | 弦溯单件抽中率 | 名称索引、全部八个分片及容器表快照，供 `ExtractionDropRatesNovember24Test` 对照全部名称／品质、百分数与阶段标签。 |
 | `WIKI_MAP_MODE_AUDIT_DIR` | 维里昂地图和模式阅读 | `ExtractionFieldGuideTest` 对照修订 120739／120758／120781／120798 的点位、测试页、原文与渲染表格。 |
+| `WIKI_MODE_NOV27_AUDIT_FILE` | 弦溯模式拆章后的完整响应 | 修订 121029 的 `action=parse&prop=wikitext\|text` JSON。`ExtractionModePublicationTest` 离线验证五章、表格记录、缓存重读与缺行回退。 |
+| `WIKI_TALENT_NOV28_AUDIT_FILE` | 超弦体天赋新版卡片 | 修订 121200 的 `parse.text.*` HTML。`StringerParsersTest` 核对四组共 24 张卡、逐级数值顺序以及缺卡或缺数值时拒收。 |
 | `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
 | `WIKI_NOV21_AUDIT_DIR` | 11 月 21 日弦溯、指南、伏闪 | 弦溯读 `drops.html`、`table.html`、`loot.html`、`attachments.html`；指南读 `beginner.html`、`review-1121/120474.html`、`review-1121/historical-120474.json`；伏闪优先读 `fushan-current.json`，也可用 `fushan.html` 与 `120510.txt`。 |
 
@@ -34,6 +37,16 @@
 同日二审修复后，重跑新人指南与全部弦溯专项：**122 项通过，0 失败、0 跳过**；Debug 编译和 Lint 通过，仍为上述 5 个警告。覆盖 120474 旧缓存、等价文章链接、逐个删除共用池、来源卡数量和池规模矛盾、同区来源搜索与排序说明、容器件数空白与明确未知的区别。该批与前一批有重叠，不累加计数。
 
 **同日晚间（[2.2.4](releases/2.2.4.md)）：** `EXTRACTION_SPLIT_AUDIT_DIR` 的迁页回归核对物资新页、配件 Q8、旧缓存及错页拒收。两个版本的快照和结果分别保留。
+
+## 怎样判断每日 CI 是否真的联网
+
+[`Wiki live smoke`](../.github/workflows/wiki-live-smoke.yml) 的计划时间是北京时间 **05:30**（UTC 21:30），实际启动可能延后。先看该次运行的提交，再看 `Wiki 实时检查` 摘要中的联网用例数、活动详情和防具页名及字节数。`LIVE_WIKI_TEST=1` 只是开关：在[11 月 24 日修复前的定时运行](https://github.com/znzsofficial/CalabiYauVoice_GUI/actions/runs/45333014925)中，测试任务显示 `FROM-CACHE`，不能用那次绿灯证明当天的上游兼容性。
+
+`e194a3e` 改为仅对测试任务使用 `--rerun`。同一提交的[修复后手动运行](https://github.com/znzsofficial/CalabiYauVoice_GUI/actions/runs/45395494362)实际执行了该任务，9 项联网用例通过；摘要记录活动详情 105,990 字节、防具图鉴 94,932 字节。字节数用于辨认当次响应，不是后续断言的固定大小。
+
+- **失败且仅出现 HTTP 403／429／567**：停止继续请求，记作上游限制访问，不自动开解析问题。没有实抓结论，不反复重试。
+- **用例断言失败**：从 Actions 的测试报告定位页名和字段；如有本次保存的原始响应，先回放再改解析器。已有同类开放 issue 时不重复建单。
+- **构建失败、必需用例缺失或跳过、缺少实抓证据**：先看 Gradle 日志和[汇总脚本](../scripts/report_wiki_smoke.py)，不能据此判断 Wiki 是否改版。另一个 [Android regex compatibility](../.github/workflows/android-regex.yml) 工作流在相关代码变更时检查 ICU 语法，不联网，也不代替此任务。
 
 ## 主动联网抓取
 
@@ -45,11 +58,11 @@ $env:LIVE_WIKI_TEST = '1'
 Remove-Item Env:LIVE_WIKI_TEST
 ```
 
-每日与手动 CI 都对 `:androidApp:testDebugUnitTest` 使用任务选项 `--rerun`：测试重新执行，编译和依赖仍可使用缓存。未启用环境变量时联网用例会跳过；CI 汇总检查 JUnit 结果及本次抓到的活动详情、防具响应，缺少证据不会标绿。运行摘要显示实际检查的页名与字节数。
+`--rerun` 只重跑选定的测试任务，编译和依赖仍可使用缓存。未启用环境变量时联网用例会跳过；平时的离线测试无需设置它。
 
 普通网页探针检查 14 页的 HTTP 状态、内容类型和 MediaWiki 内容标记。其中 Tips、历史还会调用现有 parser 检查结果非空；其余 12 页仅检查可达性和文档结构。活动列表、装备和道具等走各自的 parse API。启用联网检查时不回退到旧快照。
 
-本次抓取的 HTML 位于 `androidApp/build/live-wiki/`；测试报告位于 `androidApp/build/reports/tests/testDebugUnitTest/`。
+实抓 HTML 和 API 响应位于 `androidApp/build/live-wiki/`（新探针为 `activity-detail.json` 和 `extraction-armor.json`）；测试报告位于 `androidApp/build/reports/tests/testDebugUnitTest/`。
 
 这是公开 HTML 到 parser 的联网冒烟测试，不覆盖全部 Wiki 页面、登录接口或 Android UI。`parsesLocalLiveSnapshotsWhenPresent` 读取同一 `build/live-wiki/` 目录的本地快照做离线断言（抓取路径已与读取路径统一，抓完即可复跑）。
 

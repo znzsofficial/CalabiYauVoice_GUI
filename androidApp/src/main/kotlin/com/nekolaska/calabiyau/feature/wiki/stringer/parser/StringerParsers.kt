@@ -6,6 +6,7 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentSection
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import com.nekolaska.calabiyau.core.wiki.HtmlText
 
 object StringerPushCardParsers {
@@ -70,10 +71,15 @@ object StringerTalentParsers {
 
     private const val PAGE_NAME = "超弦体天赋"
     private const val WIKI_URL = "https://wiki.biligame.com/klbq/%E8%B6%85%E5%BC%A6%E4%BD%93%E5%A4%A9%E8%B5%8B"
+    private val sectionNames = setOf("机能", "生存", "续航", "输出")
+    private val levelBadge = Regex("""Lv\.\s*([1-9]\d*)""")
 
     fun parseHtml(html: String): TalentPage {
         val document = Jsoup.parse(html)
-        val content = document.selectFirst(".mw-parser-output") ?: document.body()
+        return parseContent(document.selectFirst(".mw-parser-output") ?: document.body())
+    }
+
+    private fun parseContent(content: Element): TalentPage {
         val sections = mutableListOf<TalentSection>()
 
         var currentTitle: String? = null
@@ -95,7 +101,7 @@ object StringerTalentParsers {
                         ?.replace(" ", "")
                         ?.trim()
                         .orEmpty()
-                    if (title in setOf("机能", "生存", "续航", "输出")) {
+                    if (title in sectionNames) {
                         flushSection()
                         currentTitle = title
                     } else if (element.tagName() == "h2") {
@@ -113,6 +119,10 @@ object StringerTalentParsers {
 
                 "div" -> {
                     if (currentTitle == null) return@forEach
+                    if (element.hasClass("talent-gallery")) {
+                        currentItems += element.children().filter { it.hasClass("talent-card") }.mapNotNull(::parseTalentCard)
+                        return@forEach
+                    }
                     element.select("table").forEach { table ->
                         if (looksLikeTalentTable(table)) {
                             currentItems += parseTalentRows(table)
@@ -128,6 +138,39 @@ object StringerTalentParsers {
             wikiUrl = WIKI_URL,
             sections = sections
         )
+    }
+
+    internal fun isComplete(html: String): Boolean {
+        val content = Jsoup.parse(html).selectFirst(".mw-parser-output") ?: return false
+        if (content.selectFirst(".error, .scribunto-error, .redirectMsg") != null) return false
+        val galleries = content.select(".talent-gallery")
+        val sections = parseContent(content).sections
+        val hasLegacyTable = content.select("table").any(::looksLikeTalentTable)
+        if (galleries.isEmpty()) return hasLegacyTable && sections.isNotEmpty()
+
+        // The four branches each advertise six talents in the current Wiki. Allow additions;
+        // a shorter branch needs review before it can replace a full offline catalog.
+        val galleryCards = galleries.map { gallery -> gallery.children().filter { it.hasClass("gallerygrid-item") } }
+        return !hasLegacyTable && galleries.size == sectionNames.size && sections.size == sectionNames.size &&
+            sections.map { it.title }.toSet() == sectionNames &&
+            galleryCards.all { cards -> cards.size >= 6 && cards.all { it.hasClass("talent-card") } } &&
+            sections.sumOf { it.items.size } == galleryCards.sumOf { it.size } &&
+            sections.all { section -> section.items.distinctBy { it.name }.size == section.items.size }
+    }
+
+    private fun parseTalentCard(card: Element): TalentItem? {
+        val name = card.selectFirst(".talent-card__name")?.text()?.takeIf(String::isNotBlank) ?: return null
+        val unlockLevel = card.selectFirst(".talent-card__badge:not(.talent-card__badge--max)")?.text()
+            ?.removePrefix("解锁")?.trim()?.takeIf(levelBadge::matches) ?: return null
+        val maxLevel = card.selectFirst(".talent-card__badge--max")?.text()?.removePrefix("上限")?.trim() ?: return null
+        val count = levelBadge.matchEntire(maxLevel)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        val effect = card.selectFirst(".talent-card__effect")?.clone() ?: return null
+        effect.select(".talent-card__label, style, script").remove()
+        val values = effect.select(".klbq-num")
+        if (values.size != count || values.any { it.text().isBlank() }) return null
+        val detail = HtmlText.detail(effect).takeIf(String::isNotBlank) ?: return null
+        return TalentItem(name, unlockLevel, maxLevel, listOf(detail), card.selectFirst(".talent-card__imagebox img")
+            ?.attr("src")?.takeIf(String::isNotBlank))
     }
 
     private fun parseTalentRows(table: org.jsoup.nodes.Element): List<TalentItem> {

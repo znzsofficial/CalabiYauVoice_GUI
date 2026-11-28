@@ -31,7 +31,7 @@ object MapDetailParsers {
         val visible = wikitext.withoutWikiComments()
         val document = Jsoup.parse(html)
         return readMap(RIFT_MAP, visible, document)?.takeIf {
-            completeFieldGuide(visible, document, riftChapters, it.chapters)
+            completeFieldGuide(visible, document, riftChapters::contains, it.chapters)
         }
     }
 
@@ -62,7 +62,7 @@ object MapDetailParsers {
             galleryUrls = galleryUrls,
             updateHistory = updateHistory,
             overviewImageUrl = overviewImageUrl,
-            chapters = if (name == RIFT_MAP) parseFieldGuide(document, riftChapters, extractionArticleUrl(name)) else emptyList()
+            chapters = if (name == RIFT_MAP) parseFieldGuide(document, riftChapters::contains, extractionArticleUrl(name)) else emptyList()
         )
     }
 

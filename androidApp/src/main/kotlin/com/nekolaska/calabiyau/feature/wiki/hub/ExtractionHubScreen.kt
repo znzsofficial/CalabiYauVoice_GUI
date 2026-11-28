@@ -34,6 +34,8 @@ import com.kyant.backdrop.Backdrop
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropTask
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAGE
@@ -53,6 +55,7 @@ internal val extractionEquipmentLinks = listOf(
 
 internal val extractionGuideLinks = listOf(
     TopicLink("模式介绍", EXTRACTION_MODE_PAGE, WikiRoute.ExtractionMode),
+    TopicLink("阵列芯元", "$EXTRACTION_MODE_PAGE/阵列芯元", null),
     TopicLink("维里昂裂隙资料", RIFT_MAP, WikiRoute.MapDetail(RIFT_MAP, null)),
     TopicLink(RIFT_WIDGET_LABEL, RIFT_WIDGET_PAGE, null),
     TopicLink("工坊", "$EXTRACTION_MODE_PAGE/工坊", WikiRoute.ExtractionWorkshop),
@@ -123,7 +126,7 @@ private fun DropLookupHeroCard(
     fontScale: Float,
     onOpenTask: (DropTask) -> Unit
 ) {
-    val shape = smoothCornerShape(14.dp)
+    val shape = TacticalStyle.cardShape
     val colors = MaterialTheme.colorScheme
     val material = rememberHubPanelMaterial(
         glassAlpha = 0.34f,
@@ -140,10 +143,10 @@ private fun DropLookupHeroCard(
         shape = shape,
         color = material.containerColor,
         contentColor = colors.onSurface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+        border = TacticalStyle.cardBorder()
     ) {
         Column(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().height(2.dp).background(colors.primary))
+            Box(Modifier.fillMaxWidth().height(TacticalStyle.accentBarHeight).background(colors.primary))
             Column(
                 Modifier.fillMaxWidth().padding(AppSpacing.screen),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -160,7 +163,7 @@ private fun DropLookupHeroCard(
                     )
                     Surface(
                         modifier = Modifier.align(Alignment.CenterVertically),
-                        shape = smoothCornerShape(6.dp),
+                        shape = TacticalStyle.pillShape,
                         color = colors.primaryContainer,
                         contentColor = colors.onPrimaryContainer,
                         border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.25f))
@@ -208,7 +211,7 @@ private fun DropLookupHeroCard(
 @Composable
 private fun DropActionButton(task: DropTask, modifier: Modifier, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val shape = smoothCornerShape(10.dp)
+    val shape = TacticalStyle.tileShape
     if (task == DropTask.ITEMS) {
         Button(
             onClick = open,
@@ -270,7 +273,7 @@ private fun EquipmentModuleGridSection(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (hasWallpaper) {
-            val headerShape = smoothCornerShape(8.dp)
+            val headerShape = TacticalStyle.badgeShape
             val headerMaterial = rememberHubPanelMaterial(
                 glassAlpha = 0.32f,
                 tone = colors.surfaceContainerLow,
@@ -352,7 +355,7 @@ private fun EquipmentModuleCard(
     modifier: Modifier,
     open: () -> Unit
 ) {
-    val shape = smoothCornerShape(14.dp)
+    val shape = TacticalStyle.cardShape
     val colors = MaterialTheme.colorScheme
     val material = rememberHubPanelMaterial(
         glassAlpha = 0.32f,
@@ -370,7 +373,7 @@ private fun EquipmentModuleCard(
         shape = shape,
         color = material.containerColor,
         contentColor = colors.onSurface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+        border = TacticalStyle.cardBorder()
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -381,21 +384,11 @@ private fun EquipmentModuleCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Surface(
-                    modifier = Modifier.size(36.dp),
-                    shape = smoothCornerShape(9.dp),
-                    color = colors.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            topicIcon(link.route),
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = colors.primary
-                        )
-                    }
-                }
+                TacticalFramedIcon(
+                    icon = topicIcon(link.route),
+                    iconSize = 20.dp,
+                    borderColor = colors.outlineVariant.copy(alpha = 0.55f)
+                )
                 Box(
                     Modifier
                         .padding(top = 2.dp, end = 2.dp)
@@ -430,7 +423,7 @@ private fun GuideDirectoryCard(
     backdrop: Backdrop,
     open: (TopicLink) -> Unit
 ) {
-    val shape = smoothCornerShape(14.dp)
+    val shape = TacticalStyle.cardShape
     val colors = MaterialTheme.colorScheme
     val material = rememberHubPanelMaterial(
         glassAlpha = 0.30f,
@@ -447,7 +440,7 @@ private fun GuideDirectoryCard(
         shape = shape,
         color = material.containerColor,
         contentColor = colors.onSurface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+        border = TacticalStyle.cardBorder()
     ) {
         Column(Modifier.fillMaxWidth().padding(vertical = AppSpacing.large)) {
             SectionHeadingRow(
@@ -471,7 +464,7 @@ private fun GuideDirectoryCard(
     }
 }
 
-private val GuideIconBoxSize = 32.dp
+private val GuideIconBoxSize = TacticalStyle.compactIconFrameSize
 
 @Composable
 private fun TopicDirectoryRow(link: TopicLink, open: () -> Unit) {
@@ -486,16 +479,12 @@ private fun TopicDirectoryRow(link: TopicLink, open: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)
     ) {
-        Surface(
-            modifier = Modifier.size(GuideIconBoxSize),
-            shape = smoothCornerShape(8.dp),
-            color = colors.surfaceContainerHigh,
-            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.50f))
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(if (link.article == RIFT_WIDGET_PAGE) Icons.Outlined.Map else topicIcon(link.route), null, Modifier.size(18.dp), tint = colors.primary)
-            }
-        }
+        TacticalFramedIcon(
+            icon = if (link.article == RIFT_WIDGET_PAGE) Icons.Outlined.Map else topicIcon(link.route),
+            size = GuideIconBoxSize,
+            iconSize = 18.dp,
+            borderColor = colors.outlineVariant.copy(alpha = 0.50f)
+        )
         if (isWeb) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val compact = maxWidth < 176.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
@@ -513,7 +502,7 @@ private fun TopicDirectoryRow(link: TopicLink, open: () -> Unit) {
                     )
                     Surface(
                         modifier = Modifier.align(Alignment.CenterVertically),
-                        shape = smoothCornerShape(6.dp),
+                        shape = TacticalStyle.pillShape,
                         color = colors.surfaceContainerHigh,
                         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f))
                     ) {

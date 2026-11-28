@@ -5,6 +5,7 @@ import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerPushCardParsers
+import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerTalentParsers
 
 data class StringerPageSourceResult(
     val html: String,
@@ -24,7 +25,11 @@ object StringerRemoteSource {
             cacheType = OfflineCache.Type.GAME_MODES,
             cacheKey = cacheKey,
             forceRefresh = forceRefresh,
-            acceptHtml = if (cacheKey == "stringer_push_cards") ({ html -> StringerPushCardParsers.parseHtml(html).cards.isNotEmpty() }) else null
+            acceptHtml = when (cacheKey) {
+                "stringer_push_cards" -> { html -> StringerPushCardParsers.parseHtml(html).cards.isNotEmpty() }
+                "stringer_talent_page" -> StringerTalentParsers::isComplete
+                else -> null
+            }
         ) ?: return null
         val html = result.html ?: return null
 

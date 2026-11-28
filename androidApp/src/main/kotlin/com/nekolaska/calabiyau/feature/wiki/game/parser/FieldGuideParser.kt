@@ -10,11 +10,11 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 /** Read article siblings, never the TOC, navigation templates, widgets or edit links. */
-internal fun parseFieldGuide(document: Document, titles: Set<String>, pageUrl: String): List<FieldGuideChapter> {
+internal fun parseFieldGuide(document: Document, isChapter: (String) -> Boolean, pageUrl: String): List<FieldGuideChapter> {
     val body = document.selectFirst(".mw-parser-output") ?: return emptyList()
     return body.children().filter { it.tagName() == "h2" }.mapNotNull { h2 ->
         val title = h2.selectFirst(".mw-headline")?.text() ?: return@mapNotNull null
-        if (title !in titles) return@mapNotNull null
+        if (!isChapter(title)) return@mapNotNull null
         val blocks = buildList {
             fun emit(node: Element, kind: Kind = Kind.TEXT, prefix: String = "", headingLevel: Int = 0, captionedBlockCount: Int = 0) {
                 val text = WikiRichTextParser.parse(node, pageUrl)
@@ -72,10 +72,24 @@ private fun fieldGuideRows(table: Element, pageUrl: String): List<FieldGuideBloc
                 cells.forEachIndexed { index, cell ->
                     if (index > 0) add(GuideSpan("\n"))
                     add(GuideSpan("${labels[index]}：", bold = true))
-                    addAll(WikiRichTextParser.parse(cell, pageUrl).spans)
+                    addAll(fieldGuideCell(cell, pageUrl))
                 }
             }
             add(FieldGuideBlock(Kind.RECORD, GuideText(record)))
+        }
+    }
+}
+
+/** One reward or prerequisite per line when the cell consists of a Wiki list. */
+private fun fieldGuideCell(cell: Element, pageUrl: String): List<GuideSpan> {
+    val list = cell.children().singleOrNull()
+    if (cell.ownText().isNotBlank() || list == null || list.tagName() !in setOf("ul", "ol")) {
+        return WikiRichTextParser.parse(cell, pageUrl).spans
+    }
+    return buildList {
+        list.children().filter { it.tagName() == "li" }.forEachIndexed { index, item ->
+            add(GuideSpan(if (list.tagName() == "ol") "\n${index + 1}. " else "\n• "))
+            addAll(WikiRichTextParser.parse(item, pageUrl).spans)
         }
     }
 }

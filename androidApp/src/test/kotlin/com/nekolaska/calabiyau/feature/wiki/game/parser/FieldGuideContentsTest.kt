@@ -25,7 +25,7 @@ class FieldGuideContentsTest {
             <h5><span class="mw-headline">奖励</span></h5>${table("奖励", "安全箱卡")}
             <h3><span class="mw-headline">撤离线</span></h3>
             <h4><span class="mw-headline">奖励</span></h4><dl><dt>芯元：</dt></dl>
-            <table class="navbox"><caption>站点导航</caption></table></div>"""), setOf("任务系统"), pageUrl).single()
+            <table class="navbox"><caption>站点导航</caption></table></div>"""), { it == "任务系统" }, pageUrl).single()
         val sections = chapter.sections()
         assertEquals(listOf("战斗线", "主链任务", "支链任务（完成战斗-4 后解锁）", "奖励", "撤离线", "奖励"), sections.map { it.label })
         assertEquals(listOf(0, 1, 1, 1, 0, 1), sections.map { it.depth })
@@ -47,7 +47,7 @@ class FieldGuideContentsTest {
             ${table("事件奖励", "配给券")}<p>表外说明</p>
             <table class="wikitable"><caption>未列任务</caption><tr><th>名称</th></tr></table>
             <table class="wikitable"><caption>另见原表</caption><tr><th colspan="2">奖励</th></tr></table>
-            </div>"""), setOf("局内事件"), pageUrl).single()
+            </div>"""), { it == "局内事件" }, pageUrl).single()
         val section = chapter.sections().single()
         assertEquals("事件奖励", section.label)
         assertEquals(0, section.depth)
@@ -70,7 +70,7 @@ class FieldGuideContentsTest {
         val path = System.getenv("WIKI_MAP_MODE_AUDIT_DIR")
         assumeTrue("Set WIKI_MAP_MODE_AUDIT_DIR to the captured 120798 revision", !path.isNullOrBlank())
         val document = Jsoup.parse(File(requireNotNull(path), "120798.html").readText(Charsets.UTF_8))
-        val chapters = parseFieldGuide(document, setOf("等级成长系统", "任务系统"), pageUrl).associateBy { it.title }
+        val chapters = parseFieldGuide(document, setOf("等级成长系统", "任务系统")::contains, pageUrl).associateBy { it.title }
         val tasks = chapters.getValue("任务系统")
         val outline = tasks.sections()
         val battle = outline.single { it.label == "战斗线（12 个）" }

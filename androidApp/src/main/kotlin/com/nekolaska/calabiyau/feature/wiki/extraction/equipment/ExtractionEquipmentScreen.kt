@@ -266,11 +266,11 @@ private fun SeriesRow(kind: EquipmentKind, row: EquipmentRow, sort: EquipmentSor
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+        border = TacticalStyle.cardBorder()
     ) {
-        Box(Modifier.fillMaxWidth().height(2.dp).background(qualityAccent))
+        Box(Modifier.fillMaxWidth().height(TacticalStyle.accentBarHeight).background(qualityAccent))
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -310,7 +310,7 @@ private fun SeriesRow(kind: EquipmentKind, row: EquipmentRow, sort: EquipmentSor
                         Text(
                             "共 ${series.variants.size} 档",
                             Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                            style = MaterialTheme.typography.labelSmall.tacticalTabular(),
                             color = colors.onSurfaceVariant
                         )
                     }
@@ -366,7 +366,7 @@ private fun EquipmentStatPill(label: String?, value: String) {
             }
             Text(
                 value,
-                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.labelSmall.tacticalTabular(),
                 fontWeight = FontWeight.SemiBold,
                 color = colors.onSurface,
                 maxLines = 1,

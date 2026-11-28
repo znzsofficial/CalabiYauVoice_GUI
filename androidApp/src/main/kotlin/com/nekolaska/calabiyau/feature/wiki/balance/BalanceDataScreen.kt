@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.balance
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,15 +22,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Shield
@@ -40,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -54,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.SheetValue
@@ -85,6 +83,10 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.WikiSheetFrame
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
 import com.nekolaska.calabiyau.feature.wiki.balance.model.CharacterMeta
@@ -314,7 +316,7 @@ fun BalanceDataScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterSummaryBar(
+internal fun FilterSummaryBar(
     mode: String?,
     season: String?,
     map: String?,
@@ -323,54 +325,35 @@ private fun FilterSummaryBar(
     onOpen: () -> Unit
 ) {
     val summary = balanceFilterSummary(mode, season, map, rankNames, compareSeason)
-    Surface(
+    val hasCompare = summary.compareLabel != null
+    TacticalCard(
         onClick = onOpen,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = smoothCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        highlighted = hasCompare,
+        accentColor = MaterialTheme.colorScheme.primary
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = smoothCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Outlined.Tune,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("筛选", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    summary.headline,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                summary.compareLabel?.let { label ->
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TacticalFramedIcon(icon = Icons.Outlined.Tune, size = TacticalStyle.compactIconFrameSize, highlighted = hasCompare)
+                FlowRow(
+                    Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Text(
-                        label,
+                        "统计范围",
+                        modifier = Modifier.align(Alignment.CenterVertically),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    summary.compareLabel?.let { label ->
+                        Text(label, Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    }
                 }
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(summary.headline, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -388,38 +371,22 @@ private fun BalanceFilterSheet(
     val selectedMode = settings.modes.find { it.code == draft.mode }
     val selectedSeason = settings.seasons.find { it.code == draft.season }
     val selectedSeason2 = settings.seasons.find { it.code == draft.compareSeason }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = smoothCornerShape(28.dp),
-        tonalElevation = 0.dp
-    ) {
-        val maxSheetHeight = with(LocalDensity.current) {
-            LocalWindowInfo.current.containerSize.height.toDp() * 0.92f
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = maxSheetHeight)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Text(
-                "筛选条件",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+    val colors = MaterialTheme.colorScheme
+    WikiSheetFrame(onDismiss = onDismiss) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 680.dp)) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                Text(
+                    "筛选条件",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
                 FilterDropdown(
                     label = "模式",
                     options = settings.modes,
@@ -466,21 +433,28 @@ private fun BalanceFilterSheet(
                     onSelectAll = { onDraftChange(draft.copy(ranks = emptyList())) }
                 )
             }
-            TextButton(onClick = onReset, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("重置筛选")
-            }
-            FilledTonalButton(
-                onClick = onApply,
-                enabled = draft.mode != null && draft.season != null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                shape = smoothCornerShape(16.dp)
+            HorizontalDivider(color = TacticalStyle.dividerColor())
+            FlowRow(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("应用筛选")
-            }
-            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("取消")
+                TextButton(
+                    onClick = onReset,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) { Text("重置筛选") }
+                Row(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                    FilledTonalButton(
+                        onClick = onApply,
+                        enabled = draft.mode != null && draft.season != null,
+                        shape = TacticalStyle.tileShape
+                    ) { Text("应用筛选") }
+                }
             }
         }
     }
@@ -496,33 +470,64 @@ private fun FilterChipGroup(
     onSelectAll: () -> Unit,
     hint: String? = null
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            if (hint != null) {
-                Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    val colors = MaterialTheme.colorScheme
+    TacticalCard(
+        compact = true,
+        containerColor = colors.surfaceContainer,
+        border = TacticalStyle.tileBorder()
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilterChip(
-                selected = allSelected,
-                onClick = onSelectAll,
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全部", maxLines = 1) }
-            )
-            options.forEach { option ->
-                FilterChip(
-                    selected = isSelected(option),
-                    onClick = { onClick(option) },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text(option.name, maxLines = 1) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
                 )
+                if (hint != null) {
+                    Text(hint, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                TacticalFilterOptionChip(selected = allSelected, label = "全部", onClick = onSelectAll)
+                options.forEach { option ->
+                    TacticalFilterOptionChip(
+                        selected = isSelected(option),
+                        label = option.name,
+                        onClick = { onClick(option) }
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun TacticalFilterOptionChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        shape = TacticalStyle.badgeShape,
+        border = TacticalStyle.cardBorder(highlighted = selected),
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            selectedContainerColor = colors.primaryContainer.copy(alpha = 0.65f),
+            selectedLabelColor = colors.onPrimaryContainer,
+            containerColor = colors.surfaceContainerLow,
+            labelColor = colors.onSurface
+        ),
+        label = { Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1) }
+    )
 }
 
 // ────────────────────────────────────────────
@@ -593,7 +598,7 @@ private fun FilterDropdown(
 // ────────────────────────────────────────────
 
 @Composable
-private fun SideAndSortBar(
+internal fun SideAndSortBar(
     showAttackers: Boolean,
     sortField: SortField,
     sortOrder: SortOrder,
@@ -601,13 +606,14 @@ private fun SideAndSortBar(
     onSideToggle: (Boolean) -> Unit,
     onSortChange: (SortField) -> Unit
 ) {
+    var sortMenuOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         // 进攻/防守切换
         ButtonGroup(
             overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = 4.dp)
                 .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
         ) {
@@ -634,26 +640,39 @@ private fun SideAndSortBar(
             }
         }
 
-        // 卡片的指标自带标签，不再保留与窄表格列对齐的表头。
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text("排序", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SortField.entries.forEach { field ->
-                FilterChip(
-                    selected = sortField == field,
-                    enabled = field != SortField.SCORE || scoreAvailable,
-                    onClick = { onSortChange(field) },
-                    label = { Text(field.label) },
-                    trailingIcon = if (sortField == field) {
-                        { Icon(if (sortOrder == SortOrder.DESC) Icons.Default.ArrowDropDown else Icons.Default.ArrowDropUp, contentDescription = if (sortOrder == SortOrder.DESC) "降序" else "升序", modifier = Modifier.size(18.dp)) }
-                    } else null
-                )
+            Box {
+                OutlinedButton(
+                    onClick = { sortMenuOpen = true }, shape = TacticalStyle.tileShape,
+                    border = TacticalStyle.tileBorder(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text("排序：${sortField.label}", modifier = Modifier.padding(end = 4.dp))
+                    Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                    SortField.entries.forEach { field ->
+                        SelectableDropdownMenuItem(
+                            selected = field == sortField,
+                            enabled = field != SortField.SCORE || scoreAvailable,
+                            text = { Text(field.label) },
+                            shapes = MenuDefaults.itemShapes(),
+                            onClick = {
+                                sortMenuOpen = false
+                                if (field != sortField) onSortChange(field)
+                            }
+                        )
+                    }
+                }
+            }
+            FilledTonalButton(
+                onClick = { onSortChange(sortField) }, shape = TacticalStyle.tileShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(if (sortOrder == SortOrder.DESC) "降序 ↓" else "升序 ↑")
             }
         }
     }
@@ -683,8 +702,8 @@ private fun HeroBalanceList(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (compareSeasonName != null) {
                     item(key = "comparison-legend") {
@@ -742,26 +761,18 @@ private fun HeroBalanceList(
 private fun BalanceDataPageSkeleton(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize()) {
         // 对齐 FilterSummaryBar
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            shape = smoothCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+        TacticalCard(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            accentColor = MaterialTheme.colorScheme.primary
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ShimmerBox(Modifier.size(40.dp), shape = smoothCornerShape(14.dp))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ShimmerBox(Modifier.width(36.dp).height(12.dp))
-                    ShimmerBox(Modifier.fillMaxWidth(0.72f).height(16.dp))
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ShimmerBox(Modifier.size(TacticalStyle.compactIconFrameSize), shape = TacticalStyle.iconFrameShape)
+                    ShimmerBox(Modifier.width(64.dp).height(14.dp))
+                    Spacer(Modifier.weight(1f))
+                    ShimmerBox(Modifier.size(20.dp), shape = TacticalStyle.pillShape)
                 }
-                Spacer(Modifier.width(8.dp))
-                ShimmerBox(Modifier.size(20.dp), shape = smoothCornerShape(6.dp))
+                ShimmerBox(Modifier.fillMaxWidth(0.72f).height(16.dp))
             }
         }
 
@@ -769,24 +780,21 @@ private fun BalanceDataPageSkeleton(modifier: Modifier = Modifier) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = smoothCornerShape(12.dp))
-            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = smoothCornerShape(12.dp))
+            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = TacticalStyle.tileShape)
+            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = TacticalStyle.tileShape)
         }
-        LazyRow(
-            userScrollEnabled = false,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            item { ShimmerBox(Modifier.width(28.dp).height(14.dp)) }
-            items(5) {
-                ShimmerBox(Modifier.width(68.dp).height(32.dp), shape = smoothCornerShape(8.dp))
-            }
+            ShimmerBox(Modifier.width(126.dp).height(40.dp), shape = TacticalStyle.tileShape)
+            ShimmerBox(Modifier.width(72.dp).height(40.dp), shape = TacticalStyle.tileShape)
         }
 
         BalanceHeroListSkeleton(Modifier.weight(1f).fillMaxWidth())
@@ -798,32 +806,33 @@ private fun BalanceHeroListSkeleton(modifier: Modifier = Modifier) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         userScrollEnabled = false,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(5) {
-            BalanceHeroCardSkeleton()
+        items(5) { index ->
+            BalanceHeroCardSkeleton(topRank = index < 3)
         }
         item { Spacer(Modifier.navigationBarsPadding()) }
     }
 }
 
 @Composable
-private fun BalanceHeroCardSkeleton() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+private fun BalanceHeroCardSkeleton(topRank: Boolean = false) {
+    val colors = MaterialTheme.colorScheme
+    TacticalCard(
+        compact = true,
+        highlighted = topRank,
+        accentColor = if (topRank) colors.primary else colors.outlineVariant.copy(alpha = 0.65f)
     ) {
-        BoxWithConstraints(Modifier.padding(16.dp)) {
+        BoxWithConstraints(Modifier.padding(14.dp)) {
             val compact = maxWidth < (280 * LocalDensity.current.fontScale).dp
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (compact) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ShimmerBox(Modifier.size(48.dp), shape = smoothCornerShape(12.dp))
+                        ShimmerBox(Modifier.size(48.dp), shape = TacticalStyle.iconFrameShape)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             ShimmerBox(Modifier.width(88.dp).height(16.dp))
-                            ShimmerBox(Modifier.width(68.dp).height(12.dp))
+                            ShimmerBox(Modifier.width(68.dp).height(14.dp))
                         }
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -836,10 +845,10 @@ private fun BalanceHeroCardSkeleton() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        ShimmerBox(Modifier.size(48.dp), shape = smoothCornerShape(12.dp))
+                        ShimmerBox(Modifier.size(48.dp), shape = TacticalStyle.iconFrameShape)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             ShimmerBox(Modifier.width(96.dp).height(16.dp))
-                            ShimmerBox(Modifier.width(72.dp).height(12.dp))
+                            ShimmerBox(Modifier.width(72.dp).height(14.dp))
                         }
                         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             ShimmerBox(Modifier.width(36.dp).height(12.dp))
@@ -848,15 +857,25 @@ private fun BalanceHeroCardSkeleton() {
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = TacticalStyle.dividerColor())
 
                 val columns = if (compact) 2 else 4
                 repeat(if (compact) 2 else 1) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         repeat(columns) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                ShimmerBox(Modifier.width(42.dp).height(12.dp))
-                                ShimmerBox(Modifier.width(50.dp).height(16.dp))
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = TacticalStyle.tileShape,
+                                color = colors.surfaceContainer,
+                                border = TacticalStyle.tileBorder()
+                            ) {
+                                Column(
+                                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    ShimmerBox(Modifier.width(42.dp).height(11.dp))
+                                    ShimmerBox(Modifier.width(50.dp).height(15.dp))
+                                }
                             }
                         }
                     }

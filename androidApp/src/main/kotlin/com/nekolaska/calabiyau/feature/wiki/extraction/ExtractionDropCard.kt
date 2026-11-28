@@ -15,7 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 
 @Composable
@@ -35,13 +37,9 @@ internal fun ExtractionDropCard(
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
-        border = BorderStroke(
-            1.dp,
-            if (isZero) colors.error.copy(alpha = 0.45f)
-            else colors.outlineVariant.copy(alpha = 0.55f)
-        )
+        border = TacticalStyle.cardBorder(highlighted = isZero, accentColor = colors.error)
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -60,7 +58,7 @@ internal fun ExtractionDropCard(
                     if (subtitle.isNotBlank()) {
                         Text(
                             subtitle,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            style = MaterialTheme.typography.bodySmall.tacticalTabular(),
                             color = colors.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -86,7 +84,7 @@ internal fun ExtractionDropCard(
             if (preview != null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = smoothCornerShape(8.dp),
+                    shape = TacticalStyle.badgeShape,
                     color = colors.surfaceContainerHigh.copy(alpha = 0.55f),
                     border = BorderStroke(
                         1.dp,
@@ -104,7 +102,7 @@ internal fun ExtractionDropCard(
                         }
                         Text(
                             preview,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            style = MaterialTheme.typography.bodySmall.tacticalTabular(),
                             color = if (evidence != null) colors.primary else colors.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -127,7 +125,7 @@ internal fun DropCountStatus(entry: ExtractionEntry) {
         DropCountState.POSITIVE -> entry.fields.firstOrNull { it.label == "件数概率" }?.let { "件数概率：${it.value}" } ?: return
     }
     Surface(
-        shape = smoothCornerShape(6.dp),
+        shape = TacticalStyle.pillShape,
         color = when {
             zero -> colors.errorContainer
             unknown -> colors.secondaryContainer
@@ -145,7 +143,7 @@ internal fun DropCountStatus(entry: ExtractionEntry) {
         Text(
             label,
             Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.labelSmall.tacticalTabular(),
             fontWeight = FontWeight.Medium,
             color = when {
                 zero -> colors.onErrorContainer
@@ -173,22 +171,15 @@ internal fun dropCandidateSummary(entry: ExtractionEntry, isContainer: Boolean, 
 internal fun ExtractionDropSourceIconBox(entry: ExtractionEntry, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val isZero = entry.dropCountState == DropCountState.ZERO
-    Surface(
-        modifier = modifier.size(40.dp),
-        shape = smoothCornerShape(10.dp),
-        color = if (isZero) colors.errorContainer else colors.surfaceContainerHigh,
-        border = BorderStroke(
-            1.dp,
-            if (isZero) colors.error.copy(alpha = 0.35f) else colors.outlineVariant.copy(alpha = 0.55f)
-        )
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            ExtractionDropSourceIcon(
-                entry = entry,
-                tint = if (isZero) colors.onErrorContainer else colors.primary
-            )
-        }
-    }
+    TacticalFramedIcon(
+        icon = dropSourceIcon(entry),
+        modifier = modifier,
+        size = 40.dp,
+        iconSize = 20.dp,
+        containerColor = if (isZero) colors.errorContainer else colors.surfaceContainerHigh,
+        borderColor = if (isZero) colors.error.copy(alpha = 0.35f) else colors.outlineVariant.copy(alpha = 0.55f),
+        iconTint = if (isZero) colors.onErrorContainer else colors.primary
+    )
 }
 
 @Composable
@@ -197,13 +188,15 @@ internal fun ExtractionDropSourceIcon(
     tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary
 ) {
     Icon(
-        when (entry.type) {
-            ExtractionEntryType.DROP_STAGE -> Icons.Outlined.AccountTree
-            ExtractionEntryType.DROP_POOL -> Icons.Outlined.Inventory2
-            else -> Icons.Outlined.LocationOn
-        },
+        dropSourceIcon(entry),
         contentDescription = null,
         modifier = Modifier.size(20.dp),
         tint = tint
     )
+}
+
+private fun dropSourceIcon(entry: ExtractionEntry) = when (entry.type) {
+    ExtractionEntryType.DROP_STAGE -> Icons.Outlined.AccountTree
+    ExtractionEntryType.DROP_POOL -> Icons.Outlined.Inventory2
+    else -> Icons.Outlined.LocationOn
 }

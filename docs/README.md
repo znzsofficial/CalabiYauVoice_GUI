@@ -4,7 +4,7 @@
 
 - **安装或从源码运行**：[Android 下载站](https://wiki.nekolaska.vip/) · [中文构建说明](../README_ZH_CN.md#-构建与运行) · [English build instructions](../README.md#-build-and-run)。Windows 桌面端可从源码运行，本次发布只分发 Android APK。
 - **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；改界面视觉与组件样式先读 [Android 视觉设计规范](android-ui-design-guide.md)；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
-- **从 2.3.1 接续**：先看[本版发布记录](releases/2.3.1.md)，再按需查[活动与旧缓存](android-wiki-ui-architecture.md#活动详情)、[弦溯掉落与玩法](extraction-mode-implementation.md)、[设备待验](device-acceptance.md)。首页视觉等已定设计保留在[2.3.0 交接](handoffs/2026-11-22-2.3.0.md)。
+- **接续当前版本**：先看[发布记录](releases/2.3.2.md)与[设备验收清单](device-acceptance.md)。战术风与画册风的使用边界见[Android 视觉设计规范](android-ui-design-guide.md)；日常 Wiki 联网检查见[每日 CI 读法](live-wiki-tests.md#怎样判断每日-ci-是否真的联网)。[11 月 24 日交接](handoffs/2026-11-24-2.3.1.md)保留上一版基线。
 - **排查线上问题**：Wiki 登录或投票看[账号会话](android-webview-auth.md#cookie-会话边界)，图鉴读不到数据看[快照索引](live-wiki-tests.md)，后台数字看[统计口径](app-usage.md#面板与口径)。
 - **验证与发版**：[设备验收清单](device-acceptance.md)记录仍需实机操作的项目；[发布清单](release-version-checklist.md)列出签名、迁移和主站核验顺序。
 
@@ -40,7 +40,7 @@
 
 ### 上游变更与验证
 
-- [联网与本地快照测试](live-wiki-tests.md)：先找对应页面的快照；需要核对实时 Wiki 时再查联网开关、请求节流和捕获格式。
+- [联网与本地快照测试](live-wiki-tests.md)：复现问题先找对应页面的快照；检查当日上游兼容性，按[每日 CI 读法](live-wiki-tests.md#怎样判断每日-ci-是否真的联网)核对实抓证据与失败原因。
 
 ## 历史审查与设计记录
 
@@ -51,7 +51,7 @@
 
 ## 发布记录
 
-当前发布：[Android 2.3.1（68）](releases/2.3.1.md)，2026-11-24。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+当前发布：[Android 2.3.2（69）](releases/2.3.2.md)。该页保存本版变更、APK 指纹、生产部署与验证结果。查过去某次变更见[历版发布记录](releases/README.md)；客户端读取的版本、下载地址和完整 APK 归档以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 
 ## 归档与维护口径
 

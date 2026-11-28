@@ -17,7 +17,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,11 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalSectionHeader
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.core.ui.WikiScrollableSheet
 
 @Composable
@@ -47,18 +48,13 @@ internal fun BioFilterStatusRow(
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
     ) {
         Box(Modifier.weight(1f)) {
-            Surface(
-                shape = AppShapes.chip,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
+            TacticalCard(compact = true, border = TacticalStyle.tileBorder()) {
                 Text(
                     text = summary,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.tacticalTabular(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -119,7 +115,7 @@ internal fun BioCardFilterSheet(
                             FilterChip(
                                 selected = selected,
                                 onClick = { onFactionChange(faction) },
-                                shape = AppShapes.chip,
+                                shape = TacticalStyle.badgeShape,
                                 label = { Text(faction) },
                                 leadingIcon = if (selected) {
                                     {
@@ -147,7 +143,7 @@ internal fun BioCardFilterSheet(
                             FilterChip(
                                 selected = selected,
                                 onClick = { onCategoryChange(category) },
-                                shape = AppShapes.chip,
+                                shape = TacticalStyle.badgeShape,
                                 label = { Text(category) },
                                 leadingIcon = if (selected) {
                                     {
@@ -218,7 +214,7 @@ internal fun BioDeckFilterSheet(
                         FilterChip(
                             selected = selected,
                             onClick = { onFactionChange(faction) },
-                            shape = AppShapes.chip,
+                            shape = TacticalStyle.badgeShape,
                             label = { Text(faction) },
                             leadingIcon = if (selected) {
                                 {
@@ -240,12 +236,7 @@ internal fun BioDeckFilterSheet(
 @Composable
 private fun FilterSection(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold
-        )
+        TacticalSectionHeader(title)
         content()
     }
 }

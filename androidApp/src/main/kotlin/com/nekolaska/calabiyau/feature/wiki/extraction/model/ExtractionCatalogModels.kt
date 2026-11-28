@@ -52,7 +52,9 @@ data class ExtractionEntry(
     /** A page-local pool explicitly named for this source; not a container identity. */
     val sharedPoolId: String? = null,
     /** Reading context for a source, not search evidence about what this particular source drops. */
-    val sectionIntroduction: String = ""
+    val sectionIntroduction: String = "",
+    /** Supplies only: material identities, separate from usage, trade and other display tags. */
+    val materialTags: List<String> = emptyList()
 ) {
     val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
     val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category
@@ -92,14 +94,22 @@ enum class ExtractionSort(val label: String, val attribute: String) {
     WEIGHT("重量", "weight"), SEARCH_TIME("搜刮耗时", "time")
 }
 
+/** Order of the Wiki's November 26 filter; older cards expose these names only on their face. */
+internal val knownMaterialTags = listOf("弦质", "能量", "科技", "精械", "生化", "工艺", "贵重")
+
+internal fun availableMaterialTags(entries: List<ExtractionEntry>): List<String> {
+    val present = entries.flatMapTo(linkedSetOf()) { it.materialTags }
+    return knownMaterialTags.filter { present.remove(it) } + present
+}
+
 /** Stable sort, with absent numbers always last rather than pretending unknown = zero. */
 internal fun filterExtractionEntries(
-    entries: List<ExtractionEntry>, query: String, category: String?, quality: Int?, valuableOnly: Boolean,
+    entries: List<ExtractionEntry>, query: String, category: String?, quality: Int?, materialTag: String?,
     sort: ExtractionSort, descending: Boolean
 ): List<ExtractionEntry> {
     val filtered = entries.filter {
         (category == null || it.filterCategory == category) && (quality == null || it.quality == quality) &&
-            (!valuableOnly || "贵重" in it.tags) && it.matches(query)
+            (materialTag == null || materialTag in it.materialTags) && it.matches(query)
     }
     if (sort == ExtractionSort.DEFAULT) return filtered
     return filtered.sortedWith { a, b ->

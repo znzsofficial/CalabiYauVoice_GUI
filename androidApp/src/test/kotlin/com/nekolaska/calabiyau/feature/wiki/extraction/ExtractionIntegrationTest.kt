@@ -86,7 +86,7 @@ class ExtractionIntegrationTest {
         assertEquals(188, supplies.entries.size)
         val attachments = captured("attachments", ExtractionCatalogKind.ATTACHMENTS); assertTrue(attachments.canCache)
         assertEquals(142, attachments.entries.size)
-        val q8 = filterExtractionEntries(attachments.entries, "", null, 8, false, ExtractionSort.DEFAULT, false)
+        val q8 = filterExtractionEntries(attachments.entries, "", null, 8, null, ExtractionSort.DEFAULT, false)
         assertEquals(setOf("4084706", "4084707"), q8.map { it.id }.toSet())
         val artwork = buildDropArtworkIndex(supplies.entries + attachments.entries)
         for (entry in q8) {
@@ -104,6 +104,7 @@ class ExtractionIntegrationTest {
         val drops = WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
         for ((query, expected) in listOf(
             "搜打撤" to WikiRoute.ExtractionHub, "弦溯战线" to WikiRoute.ExtractionHub, "弦溯战线专题" to WikiRoute.ExtractionHub,
+            "芯元" to WikiRoute.ExtractionHub, "阵列" to WikiRoute.ExtractionHub, "芯元阵列" to WikiRoute.ExtractionHub,
             "搜打撤图鉴" to loot, "弦溯战线物品图鉴" to loot, "物资图鉴" to loot,
             "搜打撤枪械" to WikiRoute.ExtractionGuns, "防具图鉴" to WikiRoute.ExtractionArmor,
             "搜打撤工坊" to WikiRoute.ExtractionWorkshop,
@@ -112,9 +113,10 @@ class ExtractionIntegrationTest {
         )) assertEquals(expected, matchingHubEntries(query).firstOrNull()?.targetRoute, query)
     }
 
-    @Test fun topicDirectoryRoutesNativeArticlesAndLeavesTheInteractiveWidgetAndRawTableOnTheWeb() {
+    @Test fun topicDirectoryRoutesNativeArticlesAndKeepsWikiOriginalsOnTheWeb() {
         val links = extractionEquipmentLinks + extractionGuideLinks
-        assertEquals(listOf(RIFT_WIDGET_LABEL, "掉落表格"), links.filter { it.route == null }.map { it.label })
+        assertEquals(listOf("阵列芯元", RIFT_WIDGET_LABEL, "掉落表格"), links.filter { it.route == null }.map { it.label })
+        assertEquals("战斗模式/弦溯战线/阵列芯元", extractionGuideLinks.single { it.label == "阵列芯元" }.article)
         assertEquals(setOf(WikiRoute.ExtractionGuns, WikiRoute.ExtractionArmor, WikiRoute.ExtractionWorkshop,
             WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT), WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS),
             WikiRoute.ExtractionMode, WikiRoute.MapDetail(RIFT_MAP, null)), links.mapNotNull { it.route }.toSet())

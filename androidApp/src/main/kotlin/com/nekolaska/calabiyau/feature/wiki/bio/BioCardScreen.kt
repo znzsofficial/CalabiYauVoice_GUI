@@ -37,7 +37,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -117,6 +116,10 @@ import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.wiki.bio.api.BioCardApi
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
@@ -401,7 +404,7 @@ fun BioCardScreen(
                         },
                         enabled = canOpenFilter,
                         modifier = Modifier.size(48.dp),
-                        shape = AppShapes.compactCard,
+                        shape = TacticalStyle.iconFrameShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = if (hasActiveFilter) {
                                 MaterialTheme.colorScheme.secondaryContainer
@@ -740,17 +743,15 @@ private fun BioCardSkeleton(tab: BioCardTab, modifier: Modifier = Modifier) {
     ) {
         if (tab == BioCardTab.DECK) {
             item(key = "deck-composer-skeleton") {
-                Surface(
-                    shape = AppShapes.card,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                TacticalCard(
+                    accentColor = MaterialTheme.colorScheme.outlineVariant
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = AppSpacing.cardContent, vertical = 18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        ShimmerBox(Modifier.size(22.dp), shape = CircleShape)
+                        ShimmerBox(Modifier.size(TacticalStyle.iconFrameSize), shape = TacticalStyle.iconFrameShape)
                         ShimmerBox(Modifier.width(120.dp).height(18.dp))
                         Spacer(Modifier.weight(1f))
                         ShimmerBox(Modifier.width(72.dp).height(14.dp))
@@ -774,26 +775,19 @@ private fun BioCardSkeleton(tab: BioCardTab, modifier: Modifier = Modifier) {
 
 @Composable
 private fun BioCardItemSkeleton() {
-    Surface(
-        shape = AppShapes.card,
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+    TacticalCard(
+        compact = true,
+        accentColor = MaterialTheme.colorScheme.outlineVariant
     ) {
         Row(
             modifier = Modifier.padding(horizontal = AppSpacing.xLarge, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            ShimmerBox(Modifier.size(84.dp), shape = AppShapes.compactCard)
+            ShimmerBox(Modifier.size(84.dp), shape = TacticalStyle.iconFrameShape)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ShimmerBox(Modifier.fillMaxWidth(0.55f).height(18.dp))
-                    ShimmerBox(Modifier.width(42.dp).height(20.dp), shape = AppShapes.chip)
-                }
+                ShimmerBox(Modifier.fillMaxWidth(0.55f).height(18.dp))
+                ShimmerBox(Modifier.width(42.dp).height(20.dp), shape = TacticalStyle.badgeShape)
                 ShimmerBox(Modifier.fillMaxWidth(0.45f).height(13.dp))
                 ShimmerBox(Modifier.fillMaxWidth(0.92f).height(14.dp))
             }
@@ -803,11 +797,7 @@ private fun BioCardItemSkeleton() {
 
 @Composable
 private fun BioDeckItemSkeleton() {
-    Surface(
-        shape = AppShapes.card,
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
+    TacticalCard(compact = true) {
         Column(
             modifier = Modifier.padding(horizontal = AppSpacing.xLarge, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -834,7 +824,7 @@ private fun BioDeckItemSkeleton() {
 }
 
 @Composable
-private fun BioCardItem(
+internal fun BioCardItem(
     modifier: Modifier = Modifier,
     imageUrl: String?,
     title: String,
@@ -845,11 +835,12 @@ private fun BioCardItem(
     fallbackIcon: ImageVector,
     onClick: () -> Unit
 ) {
-    Surface(
+    TacticalCard(
         onClick = onClick,
-        shape = AppShapes.card,
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f)
+        compact = true,
+        modifier = modifier,
+        accentColor = accentColor,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = AppSpacing.xLarge, vertical = 14.dp),
@@ -857,7 +848,7 @@ private fun BioCardItem(
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Surface(
-                shape = AppShapes.compactCard,
+                shape = TacticalStyle.iconFrameShape,
                 color = accentColor.copy(alpha = 0.12f),
                 border = BorderStroke(1.dp, accentColor.copy(alpha = 0.34f)),
                 modifier = Modifier.size(84.dp)
@@ -884,46 +875,11 @@ private fun BioCardItem(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (badge.isNotBlank()) {
-                        Surface(
-                            shape = AppShapes.chip,
-                            color = accentColor.copy(alpha = 0.14f),
-                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.32f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(accentColor, CircleShape)
-                                )
-                                Text(
-                                    text = badge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
+                Text(
+                    text = title, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                if (badge.isNotBlank()) BioColorBadge(badge, accentColor)
                 if (meta.isNotBlank()) {
                     Text(
                         text = meta,
@@ -936,7 +892,7 @@ private fun BioCardItem(
                 if (effect.isNotBlank()) {
                     Text(
                         text = effect,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.tacticalTabular(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -960,11 +916,11 @@ private fun BioDeckItem(
         "${deck.cardNames.size} 张卡牌".takeIf { deck.cardNames.isNotEmpty() }
     ).joinToString(" · ")
 
-    Surface(
+    TacticalCard(
         onClick = onClick,
-        shape = AppShapes.card,
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f)
+        compact = true,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = AppSpacing.xLarge, vertical = 16.dp),
@@ -984,30 +940,7 @@ private fun BioDeckItem(
                     modifier = Modifier.weight(1f)
                 )
                 if (deck.faction.isNotBlank()) {
-                    Surface(
-                        shape = AppShapes.chip,
-                        color = factionColor.copy(alpha = 0.14f),
-                        border = BorderStroke(1.dp, factionColor.copy(alpha = 0.3f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(factionColor, CircleShape)
-                            )
-                            Text(
-                                text = deck.faction,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                    BioColorBadge(deck.faction, factionColor)
                 }
             }
 
@@ -1119,13 +1052,7 @@ private fun DeckShareComposerCard(
         val threshold = remember(selectedFaction) { DECK_RARITY_THRESHOLDS[selectedFaction].orEmpty() }
         val customCount = (mergedSelectedIds.size - defaultCards.size).coerceAtLeast(0)
 
-        Surface(
-            shape = AppShapes.card,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(AppShapes.card),
-            color = MaterialTheme.colorScheme.surfaceContainerLow
-        ) {
+        TacticalCard(accentColor = MaterialTheme.colorScheme.primary) {
             Column(
                 modifier = Modifier.padding(AppSpacing.cardContent),
                 verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
@@ -1138,20 +1065,7 @@ private fun DeckShareComposerCard(
                         .clickable { onExpandedChange(!isExpanded) }
                         .padding(vertical = 2.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier.size(36.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Outlined.Publish,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
+                    TacticalFramedIcon(Icons.Outlined.Publish, highlighted = true)
                     Spacer(Modifier.width(AppSpacing.large))
                     Column(Modifier.weight(1f)) {
                         Text("卡组发布（Beta）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1318,83 +1232,7 @@ private fun DeckShareComposerCard(
                             }
                         }
 
-                        Surface(
-                            shape = AppShapes.compactCard,
-                            color = MaterialTheme.colorScheme.surfaceContainer
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
-                            ) {
-                                Text(
-                                    "稀有度统计（含默认卡 · 单项上限 $MAX_PER_RARITY）",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
-                                ) {
-                                    listOf("完美" to 4, "卓越" to 3, "精致" to 2).forEach { (key, rarityInt) ->
-                                        val now = rarityCounts[key] ?: 0
-                                        val need = threshold[key] ?: 0
-                                        val ok = now in need..MAX_PER_RARITY
-                                        val rarityColor = bioRarityColor(rarityInt)
-                                        Surface(
-                                            modifier = Modifier.weight(1f),
-                                            shape = AppShapes.chip,
-                                            color = if (ok) rarityColor.copy(alpha = 0.14f)
-                                            else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            border = BorderStroke(
-                                                1.dp,
-                                                if (ok) rarityColor.copy(alpha = 0.35f)
-                                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-                                            )
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .background(rarityColor, CircleShape)
-                                                    )
-                                                    Text(
-                                                        key,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    if (ok) {
-                                                        Icon(
-                                                            Icons.Outlined.Check,
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.onSurface,
-                                                            modifier = Modifier.size(12.dp)
-                                                        )
-                                                    }
-                                                }
-                                                Text(
-                                                    "$now / $need",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (ok) MaterialTheme.colorScheme.onSurface
-                                                    else MaterialTheme.colorScheme.error
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        if (cards.isNotEmpty()) BioDeckQualitySummary(rarityCounts, threshold)
 
                         OutlinedButton(
                             onClick = { onShowCardSelectorChange(true) },
@@ -1479,6 +1317,8 @@ private fun DeckShareComposerCard(
                 cards = userSelectableCards,
                 selectedIds = selectableIds.toList(),
                 images = cardImages,
+                rarityCounts = rarityCounts,
+                minimums = threshold,
                 onDismiss = { onShowCardSelectorChange(false) },
                 onToggle = { card ->
                     if (!isSubmitting) toggle(card, cards)?.let(onShowMessage)

@@ -15,7 +15,7 @@ private sealed interface FieldGuideMark {
 
 private val heading = Regex("""(={2,6})\s*([^=]+?)\s*\1""")
 
-private fun declaredFieldGuide(wikitext: String, chapters: Set<String>): List<FieldGuideMark>? {
+private fun declaredFieldGuide(wikitext: String, isChapter: (String) -> Boolean): List<FieldGuideMark>? {
     val outline = mutableListOf<FieldGuideMark>()
     var inChapter = false
     val lines = wikitext.withoutWikiComments().lineSequence().iterator()
@@ -25,7 +25,7 @@ private fun declaredFieldGuide(wikitext: String, chapters: Set<String>): List<Fi
         if (match != null) {
             val level = match.groupValues[1].length
             val title = match.groupValues[2].trim()
-            if (level == 2) inChapter = title in chapters
+            if (level == 2) inChapter = isChapter(title)
             if (inChapter) outline += FieldGuideMark.Heading(level, title)
         } else if (inChapter && line.startsWith("{|")) {
             val table = readWikiTableDeclaration(lines) ?: return null
@@ -35,8 +35,8 @@ private fun declaredFieldGuide(wikitext: String, chapters: Set<String>): List<Fi
     return outline
 }
 
-internal fun completeFieldGuide(wikitext: String, document: Document, titles: Set<String>, chapters: List<FieldGuideChapter>): Boolean {
-    val expected = declaredFieldGuide(wikitext, titles) ?: return false
+internal fun completeFieldGuide(wikitext: String, document: Document, isChapter: (String) -> Boolean, chapters: List<FieldGuideChapter>): Boolean {
+    val expected = declaredFieldGuide(wikitext, isChapter) ?: return false
     val article = document.selectFirst(".mw-parser-output") ?: return false
     val actual = mutableListOf<FieldGuideMark>()
     var inChapter = false
@@ -44,7 +44,7 @@ internal fun completeFieldGuide(wikitext: String, document: Document, titles: Se
         val level = node.htmlHeadingLevel()
         if (level != null && level >= 2) {
             val title = node.selectFirst(".mw-headline")?.text().orEmpty()
-            if (level == 2) inChapter = title in titles
+            if (level == 2) inChapter = isChapter(title)
             if (inChapter) actual += FieldGuideMark.Heading(level, title)
         } else if (inChapter && node.normalName() == "table" && (node.hasClass("klbqtable") || node.hasClass("wikitable"))) {
             val rows = node.select("tr").filter { it.closest("table") == node }

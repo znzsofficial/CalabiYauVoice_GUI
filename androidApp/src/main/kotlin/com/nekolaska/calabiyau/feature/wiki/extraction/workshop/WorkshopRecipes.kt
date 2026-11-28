@@ -203,7 +203,7 @@ internal fun WorkshopRecipeSheet(
                 border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
             ) {
                 Column(Modifier.fillMaxWidth()) {
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(colors.primary))
+                    Box(Modifier.fillMaxWidth().height(TacticalStyle.accentBarHeight).background(colors.primary))
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         WorkshopTitle(recipe.name)
                         FlowRow(
@@ -280,7 +280,7 @@ private fun RecipeMetricTile(label: String, value: String, modifier: Modifier = 
             Text(label, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             Text(
                 value,
-                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.titleMedium.tacticalTabular(),
                 fontWeight = FontWeight.Bold,
                 color = colors.onSurface
             )

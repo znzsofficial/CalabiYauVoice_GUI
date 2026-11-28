@@ -22,8 +22,9 @@ object ExtractionCatalogParsers {
                 val level = it.attr("data-option").substringAfter('|').toIntOrNull() ?: return@mapNotNull null
                 level to it.text().trim()
             }.toMap()
+            val legacyLoot = kind == ExtractionCatalogKind.LOOT && document.selectFirst(".cardSelectOption[data-group=3]") == null
             document.select(".gallerygrid-item.$prefix").mapNotNull { card ->
-                ExtractionItemParser.parse(card, prefix, qualityNames).also {
+                ExtractionItemParser.parse(card, prefix, qualityNames, legacyLoot).also {
                     if (it == null) issues += "$prefix: missing name"
                 }
             }

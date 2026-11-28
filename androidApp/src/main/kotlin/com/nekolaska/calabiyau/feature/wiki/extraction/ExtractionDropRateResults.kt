@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -12,7 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.LoadState
 import com.nekolaska.calabiyau.core.ui.OfflineBanner
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropRate
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropRateSelection
 
@@ -58,8 +58,8 @@ internal fun LazyListScope.dropRateItems(
     }
     items(selection.rows, key = { "rate:${it.key}" }, contentType = { "drop-rate" }) { (_, rate) ->
         val colors = MaterialTheme.colorScheme
-        Surface(Modifier.fillMaxWidth().dropItemMotion(this).semantics(mergeDescendants = true) {}, shape = smoothCornerShape(12.dp), color = colors.surfaceContainerLow,
-            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))) {
+        Surface(Modifier.fillMaxWidth().dropItemMotion(this).semantics(mergeDescendants = true) {}, shape = TacticalStyle.compactCardShape, color = colors.surfaceContainerLow,
+            border = TacticalStyle.cardBorder()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 // Honor the measured label and system font size. When both fit, all rates end on
                 // the same column; otherwise wrap the whole percentage below the source name.
@@ -67,7 +67,7 @@ internal fun LazyListScope.dropRateItems(
                     itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(rate.source, style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
-                    Text(rate.displayPercent, style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                    Text(rate.displayPercent, style = MaterialTheme.typography.titleMedium.tacticalTabular(),
                         fontWeight = FontWeight.SemiBold, color = colors.primary, softWrap = false)
                 }
                 Text(listOf(rate.type, rate.pool, rate.quality?.let { "Q$it" } ?: "品质未标注").joinToString(" · "),

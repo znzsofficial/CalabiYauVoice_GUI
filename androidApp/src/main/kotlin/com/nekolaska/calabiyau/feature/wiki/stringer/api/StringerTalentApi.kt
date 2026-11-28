@@ -16,6 +16,9 @@ object StringerTalentApi : CachedWikiApi<TalentPage>("StringerTalentApi") {
         ioApiCall("读取超弦体天赋缓存失败") {
             val result = StringerRemoteSource.loadCachedPageHtml(PAGE_NAME, "stringer_talent_page")
                 ?: return@ioApiCall ApiResult.Error("没有超弦体天赋缓存", kind = ErrorKind.NETWORK)
+            if (!StringerTalentParsers.isComplete(result.html)) {
+                return@ioApiCall ApiResult.Error("超弦体天赋缓存内容不完整", kind = ErrorKind.PARSE)
+            }
             val page = StringerTalentParsers.parseHtml(result.html)
             if (page.sections.isEmpty()) {
                 ApiResult.Error("未找到超弦体天赋缓存数据", kind = ErrorKind.NOT_FOUND)

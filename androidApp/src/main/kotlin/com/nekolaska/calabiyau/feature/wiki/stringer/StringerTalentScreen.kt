@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PhotoFilter
@@ -46,8 +45,10 @@ import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.TacticalBadge
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.wiki.stringer.api.StringerTalentApi
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
@@ -86,104 +87,20 @@ fun StringerTalentScreen(
             isDataEmpty = { it.sections.isEmpty() },
             loading = { mod -> LoadingState(mod, "正在加载天赋数据…") }
         ) { page ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item(key = "talent-overview") {
-                    TalentOverviewCard(page = page)
-                }
-                items(page.sections, key = { it.title }) { section ->
-                    TalentSectionCard(section = section)
-                }
-                item { Spacer(Modifier.height(18.dp)) }
-            }
+            TalentSectionList(page.sections)
         }
     }
 }
 
 @Composable
-private fun TalentOverviewCard(page: TalentPage) {
-    val totalCount = page.sections.sumOf { it.items.size }
-    val maxLevel = page.sections
-        .flatMap { it.items }
-        .mapNotNull { item -> item.maxLevel.filter { it.isDigit() }.toIntOrNull() }
-        .maxOrNull()
-
-    Card(
-        shape = smoothCornerShape(28.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+internal fun TalentSectionList(sections: List<TalentSection>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 30.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Surface(
-                    shape = smoothCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = page.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TalentStatPill(label = "分区", value = page.sections.size.toString(), modifier = Modifier.weight(1f))
-                TalentStatPill(label = "天赋", value = totalCount.toString(), modifier = Modifier.weight(1f))
-                TalentStatPill(label = "满级", value = maxLevel?.toString() ?: "--", modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TalentStatPill(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = smoothCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-            )
+        items(sections, key = { it.title }) { section ->
+            TalentSectionCard(section)
         }
     }
 }
@@ -299,8 +216,8 @@ private fun TalentItemCard(item: TalentItem) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        TalentLevelBadge(text = "解锁 ${item.unlockLevel}")
-                        TalentLevelBadge(text = "满级 ${item.maxLevel}")
+                        if (item.unlockLevel.isNotBlank()) TacticalBadge("解锁 ${item.unlockLevel}", tabular = true)
+                        if (item.maxLevel.isNotBlank()) TacticalBadge("满级 ${item.maxLevel}", tabular = true)
                     }
                 }
             }
@@ -328,25 +245,9 @@ private fun TalentDetailRow(detail: String) {
         Spacer(Modifier.width(8.dp))
         Text(
             detail,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.tacticalTabular(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun TalentLevelBadge(text: String) {
-    Surface(
-        shape = smoothCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }

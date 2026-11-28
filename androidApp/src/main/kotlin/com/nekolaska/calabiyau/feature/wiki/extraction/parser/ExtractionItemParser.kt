@@ -7,7 +7,7 @@ import org.jsoup.nodes.Element
 internal object ExtractionItemParser {
     private val gridSize = Regex("""\d+\s*[×xX]\s*\d+""")
 
-    fun parse(card: Element, prefix: String, qualities: Map<Int, String>): ExtractionEntry? {
+    fun parse(card: Element, prefix: String, qualities: Map<Int, String>, legacyLoot: Boolean): ExtractionEntry? {
         val name = card.selectFirst(".$prefix-name")?.text()?.trim().orEmpty()
         if (name.isBlank()) return null
         val rawId = card.attr("data-sort-id").trim()
@@ -38,8 +38,22 @@ internal object ExtractionItemParser {
             }
             content(card.selectFirst(".$prefix-loot")).takeIf { it.isNotBlank() }?.let { add(ExtractionField("掉落信息", it)) }
         }
-        val tags = card.select(".$prefix-tag").map { it.text().trim() }.filter { it.isNotBlank() } +
-            card.attr("data-param3").split(',', '，').map { it.trim() }.filter { it.isNotBlank() }
+        val chips = card.select(".$prefix-tag")
+        val paramTags = card.attr("data-param3").split(',', '，').map { it.trim() }.filter { it.isNotEmpty() }
+        val materialTags = when {
+            prefix != "sec-card" -> emptyList()
+            !legacyLoot -> paramTags.distinct()
+            else -> (paramTags + chips.filter { !it.hasAttr("data-tag") || it.attr("data-tag") == "贵重" }
+                .filterNot { it.hasClass("sec-qtag") }.flatMap { splitTags(it.text()) }.filter { it in knownMaterialTags }).distinct()
+        }
+        // The new template prints comma-separated material names as one caption with ideographic commas.
+        // Expand just that chip; keep punctuation inside usage/trade labels as authored.
+        val tags = chips.flatMap { chip ->
+            val label = chip.text().trim()
+            val parts = splitTags(label)
+            if (!chip.hasAttr("data-tag") && parts.size > 1 && parts.all { it in materialTags }) parts
+            else listOf(label)
+        }.filter { it.isNotBlank() } + paramTags
         val imageUrl = card.selectFirst(".$prefix-img img")?.let {
             listOf(it.attr("data-src"), it.attr("src"), it.attr("srcset").substringBefore(',').trim().substringBefore(' '))
                 .firstNotNullOfOrNull { candidate ->
@@ -51,7 +65,7 @@ internal object ExtractionItemParser {
         return ExtractionEntry(
             id = rawId.ifBlank { "$prefix:$category:$quality:$name:${fields.hashCode()}" },
             name = name, category = category.ifBlank { "未分类" }, quality = quality,
-            qualityLabel = qualities[quality]?.takeIf { it.isNotBlank() } ?: when (quality) {
+            materialTags = materialTags, qualityLabel = qualities[quality]?.takeIf { it.isNotBlank() } ?: when (quality) {
                 1 -> "优秀"; 2 -> "精致"; 3 -> "卓越"; 4 -> "完美"; 5 -> "臻藏"
                 null -> ""; else -> "Q$quality"
             }, imageUrl = imageUrl, description = description, fields = fields, tags = tags.distinct(),
@@ -60,4 +74,6 @@ internal object ExtractionItemParser {
             }.toMap()
         )
     }
+
+    private fun splitTags(value: String) = value.split(',', '，', '、').map { it.trim() }.filter { it.isNotEmpty() }
 }

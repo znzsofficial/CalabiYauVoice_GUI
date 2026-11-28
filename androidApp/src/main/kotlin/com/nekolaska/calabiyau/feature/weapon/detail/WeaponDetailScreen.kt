@@ -35,8 +35,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
@@ -79,12 +77,14 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -108,6 +108,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
@@ -120,6 +121,11 @@ import util.wikiPathEncode
 
 private val WeaponCardRadius = 22.dp
 private val WeaponMediaRadius = 18.dp
+private val WeaponMediaHeight = 176.dp
+private val WeaponMediaInset = 16.dp
+private val WeaponHeaderInset = 20.dp
+private val WeaponDetailSidePadding = 16.dp
+private val WeaponDetailTopPadding = 14.dp
 private val WeaponFrostedSurface = Color(0xCC141720)
 private val WeaponFrostedRim = Color.White.copy(alpha = 0.14f)
 
@@ -219,7 +225,43 @@ fun WeaponDetailScreen(
 private enum class WeaponSection(val label: String) { OVERVIEW("概览"), DATA("数据"), UPGRADES("增幅") }
 
 @Composable
-private fun WeaponDetailContent(
+private fun WeaponSectionTabs(
+    sections: List<WeaponSection>, current: WeaponSection, onSelect: ((WeaponSection) -> Unit)? = null
+) {
+    val loading = onSelect == null
+    val placeholder = if (loading) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier
+    Box {
+        PrimaryTabRow(selectedTabIndex = sections.indexOf(current), modifier = placeholder) {
+            sections.forEach { tab ->
+                Tab(
+                    selected = current == tab,
+                    enabled = !loading && sections.size > 1,
+                    onClick = { onSelect?.invoke(tab) },
+                    text = { Text(tab.label) }
+                )
+            }
+        }
+        if (loading) ShimmerBox(Modifier.align(Alignment.Center).width(52.dp).height(16.dp), AppShapes.capsule)
+    }
+}
+
+@Composable
+private fun weaponSharedImageModifier(
+    name: String,
+    sharedScope: SharedTransitionScope?,
+    visibilityScope: androidx.compose.animation.AnimatedVisibilityScope?
+): Modifier {
+    val imageBounds = Modifier.fillMaxSize().padding(WeaponMediaInset)
+    return if (sharedScope != null && visibilityScope != null) with(sharedScope) {
+        imageBounds.sharedElement(
+            rememberSharedContentState(key = "weapon-image-$name"), visibilityScope,
+            boundsTransform = { _, _ -> tween(500) }
+        )
+    } else imageBounds
+}
+
+@Composable
+internal fun WeaponDetailContent(
     detail: WeaponDetail,
     onOpenWikiUrl: (String) -> Unit,
     onOpenSkins: ((String) -> Unit)? = null,
@@ -244,13 +286,12 @@ private fun WeaponDetailContent(
     val current = selected.takeIf { it in sections } ?: WeaponSection.OVERVIEW
     val pages = rememberSaveableStateHolder()
     Column(Modifier.fillMaxSize()) {
-        if (sections.size > 1) PrimaryTabRow(selectedTabIndex = sections.indexOf(current)) {
-            sections.forEach { tab -> Tab(selected = current == tab, onClick = { selected = tab }, text = { Text(tab.label) }) }
-        }
+        // Even an overview-only weapon keeps the first row so a cold load cannot shift the image.
+        WeaponSectionTabs(sections, current) { selected = it }
         pages.SaveableStateProvider("${detail.name}:${current.name}") {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(start = WeaponDetailSidePadding, end = WeaponDetailSidePadding, top = WeaponDetailTopPadding, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 when (current) {
@@ -400,13 +441,13 @@ private fun WeaponHeaderCard(
         colors = weaponCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(WeaponHeaderInset)) {
             // 武器图片（支持点击放大预览与失败占位；sharedElement 仅附着在图片上，避免拉伸缩放提示徽标）
             if (detail.imageUrl != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(176.dp)
+                        .height(WeaponMediaHeight)
                         .clip(stageShape)
                         .background(
                             Brush.verticalGradient(
@@ -431,20 +472,7 @@ private fun WeaponHeaderCard(
                             contentDescription = detail.name,
                             contentScale = ContentScale.Fit,
                             onError = { imageFailed = true },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp)
-                                .then(
-                                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                        with(sharedTransitionScope) {
-                                            Modifier.sharedElement(
-                                                sharedContentState = rememberSharedContentState(key = "weapon-image-${detail.name}"),
-                                                animatedVisibilityScope = animatedVisibilityScope,
-                                                boundsTransform = { _, _ -> tween(500) }
-                                            )
-                                        }
-                                    } else Modifier
-                                )
+                            modifier = weaponSharedImageModifier(detail.name, sharedTransitionScope, animatedVisibilityScope)
                         )
                         if (onPreviewImage != null) {
                             Surface(
@@ -837,6 +865,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
             val rows = groupedTables[effectivePlatform].orEmpty()
             val pelletOnly = rows.isNotEmpty() && rows.all { it.upper.isBlank() && it.lower.isBlank() }
             if (rows.isNotEmpty()) {
+                val numericStyle = MaterialTheme.typography.bodyMedium.tacticalTabular()
                 Spacer(Modifier.height(16.dp))
 
                 Surface(
@@ -913,7 +942,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                         ) {
                             Text(
                                 normalizeDistanceLabel(row.distance).substringBefore("·蓄力"),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = numericStyle,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.align(Alignment.CenterVertically)
                             )
@@ -937,27 +966,27 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                             Text(
                                 row.head,
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = numericStyle,
                                 textAlign = TextAlign.Center
                             )
                         } else {
                             Text(
                                 row.head,
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = numericStyle,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
                                 row.upper,
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = numericStyle,
                                 textAlign = TextAlign.Center
                             )
                             Text(
                                 row.lower,
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = numericStyle,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1253,7 +1282,7 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
 }
 
 @Composable
-private fun WeaponDetailSkeleton(
+internal fun WeaponDetailSkeleton(
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
     weaponName: String = "",
@@ -1266,47 +1295,30 @@ private fun WeaponDetailSkeleton(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
-            .padding(top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            repeat(2) { ShimmerBox(Modifier.width(52.dp).height(16.dp), AppShapes.capsule) }
-        }
-        Box(Modifier.padding(horizontal = 16.dp)) {
+        WeaponSectionTabs(listOf(WeaponSection.OVERVIEW), WeaponSection.OVERVIEW)
+        Box(Modifier.padding(start = WeaponDetailSidePadding, end = WeaponDetailSidePadding, top = WeaponDetailTopPadding)) {
             Card(shape = cardShape, colors = cardColors, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
+                Column(Modifier.padding(WeaponHeaderInset)) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(176.dp)
+                            .height(WeaponMediaHeight)
                             .clip(stageShape)
                             .background(MaterialTheme.colorScheme.surfaceContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        val sharedMod = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "weapon-image-$weaponName"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    boundsTransform = { _, _ -> tween(500) }
-                                )
-                            }
-                        } else Modifier
                         if (imageUrl != null) {
                             AsyncImage(
                                 model = imageUrl,
                                 contentDescription = weaponName,
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp)
-                                    .then(sharedMod)
+                                modifier = weaponSharedImageModifier(weaponName, sharedTransitionScope, animatedVisibilityScope)
                             )
                         } else {
                             ShimmerBox(
-                                modifier = Modifier.fillMaxSize().then(sharedMod),
+                                modifier = Modifier.fillMaxSize(),
                                 shape = stageShape
                             )
                         }
@@ -1321,7 +1333,7 @@ private fun WeaponDetailSkeleton(
             }
         }
         // Overview initially shows the published mechanics, not the off-screen data table.
-        Box(Modifier.padding(horizontal = 16.dp)) {
+        Box(Modifier.padding(start = WeaponDetailSidePadding, end = WeaponDetailSidePadding, top = 14.dp)) {
             Card(shape = cardShape, colors = cardColors, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
                     SkeletonSectionTitle()

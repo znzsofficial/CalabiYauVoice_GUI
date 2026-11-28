@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Tune
@@ -283,13 +284,13 @@ private val hubSearchEntries = listOf(
         WikiRoute.GameModes
     ),
     searchEntry(
-        "extraction_hub", "弦溯战线", "物资、装备与掉落",
-        listOf("弦溯战线专题", "搜打撤", "搜打撤专题", "撤离"),
+        "extraction_hub", "弦溯战线", "物资装备、掉落查询与阵列芯元",
+        listOf("弦溯战线专题", "搜打撤", "搜打撤专题", "撤离", "阵列芯元", "芯元阵列", "阵列", "芯元"),
         Icons.Outlined.Explore, WikiRoute.ExtractionHub
     ),
     searchEntry(
-        "extraction_mode", "弦溯战线模式介绍", "等级成长、角色天赋、任务与局内事件",
-        listOf("搜打撤等级", "等级成长系统", "弦溯天赋", "弦溯任务", "任务系统", "局内事件"),
+        "extraction_mode", "弦溯战线模式介绍", "调查等级、角色等级与天赋、任务和局内事件",
+        listOf("搜打撤等级", "等级成长系统", "调查等级", "弦溯玩家等级", "弦溯角色等级", "弦溯天赋", "弦溯任务", "任务系统", "局内事件"),
         Icons.Outlined.Explore, WikiRoute.ExtractionMode
     ),
     searchEntry(
@@ -311,7 +312,7 @@ private val hubSearchEntries = listOf(
     searchEntry(
         "extraction_armor", "弦溯战线防具图鉴", "护甲、生命与占格",
         listOf("防具图鉴", "搜打撤防具", "搜打撤防具图鉴", "弦溯战线防具图鉴"),
-        Icons.Outlined.Inventory2, WikiRoute.ExtractionArmor
+        Icons.Outlined.Shield, WikiRoute.ExtractionArmor
     ),
     searchEntry(
         "extraction_workshop", "弦溯战线工坊", "制作配方、舱室升级与派驻",
@@ -321,7 +322,7 @@ private val hubSearchEntries = listOf(
     searchEntry(
         "extraction_attachments", "弦溯战线配件图鉴", "槽位、效果与适用武器",
         listOf("弦溯战线", "搜打撤", "配件图鉴", "搜打撤配件", "搜打撤配件图鉴", "弦溯战线配件图鉴"),
-        Icons.Outlined.GpsFixed, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS)
+        Icons.Outlined.Tune, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS)
     ),
     searchEntry(
         "extraction_drops", "弦溯战线掉落查询", "各品质物品的掉落来源",

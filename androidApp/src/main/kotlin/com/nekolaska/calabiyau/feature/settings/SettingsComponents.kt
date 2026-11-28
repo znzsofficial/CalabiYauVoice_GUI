@@ -75,43 +75,40 @@ import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.TacticalBadge
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  Direction B · Tactical Precision Design Tokens
 // ════════════════════════════════════════════════════════
 
-internal val SettingsCardRadius = 14.dp
-internal val SettingsIconFrameRadius = 10.dp
-internal val SettingsBadgeRadius = 8.dp
-internal val SettingsAccentBarHeight = 2.dp
-internal val SettingsIconFrameSize = 36.dp
+internal val SettingsCardRadius = TacticalStyle.cardRadius
+internal val SettingsIconFrameRadius = TacticalStyle.iconFrameRadius
+internal val SettingsBadgeRadius = TacticalStyle.badgeRadius
+internal val SettingsAccentBarHeight = TacticalStyle.accentBarHeight
+internal val SettingsIconFrameSize = TacticalStyle.iconFrameSize
 internal val SettingsRowHorizontalPadding = AppSpacing.screen
 internal val SettingsRowIconGap = 14.dp
 internal val SettingsDividerStartIndent = SettingsRowHorizontalPadding + SettingsIconFrameSize + SettingsRowIconGap
 
 internal val SettingsCardShape: Shape
-    @Composable get() = smoothCornerShape(SettingsCardRadius)
+    @Composable get() = TacticalStyle.cardShape
 
 internal val SettingsIconFrameShape: Shape
-    @Composable get() = smoothCornerShape(SettingsIconFrameRadius)
+    @Composable get() = TacticalStyle.iconFrameShape
 
 internal val SettingsBadgeShape: Shape
-    @Composable get() = smoothCornerShape(SettingsBadgeRadius)
+    @Composable get() = TacticalStyle.badgeShape
 
 @Composable
-internal fun settingsCardBorder(highlighted: Boolean = false): BorderStroke = BorderStroke(
-    width = 1.dp,
-    color = if (highlighted) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-    }
-)
+internal fun settingsCardBorder(highlighted: Boolean = false): BorderStroke =
+    TacticalStyle.cardBorder(highlighted = highlighted)
 
 @Composable
-internal fun settingsDividerColor(): Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)
+internal fun settingsDividerColor(): Color = TacticalStyle.dividerColor()
 
 @Composable
 internal fun SettingsFramedIcon(
@@ -123,21 +120,15 @@ internal fun SettingsFramedIcon(
     borderColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
-    Surface(
-        modifier = modifier.size(size),
-        shape = SettingsIconFrameShape,
-        color = containerColor,
-        border = BorderStroke(1.dp, borderColor)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(iconSize)
-            )
-        }
-    }
+    TacticalFramedIcon(
+        icon = icon,
+        modifier = modifier,
+        size = size,
+        iconSize = iconSize,
+        containerColor = containerColor,
+        borderColor = borderColor,
+        iconTint = iconTint
+    )
 }
 
 @Composable
@@ -147,33 +138,12 @@ internal fun SettingsValueBadge(
     highlighted: Boolean = false,
     tabular: Boolean = false
 ) {
-    val colors = MaterialTheme.colorScheme
-    val containerColor = if (highlighted) colors.primaryContainer else colors.surfaceContainerHigh
-    val contentColor = if (highlighted) colors.onPrimaryContainer else colors.onSurfaceVariant
-    val borderColor = if (highlighted) {
-        colors.primary.copy(alpha = 0.35f)
-    } else {
-        colors.outlineVariant.copy(alpha = 0.45f)
-    }
-    val textStyle = MaterialTheme.typography.labelSmall.copy(
-        fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Medium,
-        fontFeatureSettings = if (tabular) "tnum" else null
-    )
-    Surface(
+    TacticalBadge(
+        text = text,
         modifier = modifier,
-        shape = SettingsBadgeShape,
-        color = containerColor,
-        border = BorderStroke(1.dp, borderColor)
-    ) {
-        Text(
-            text = text,
-            style = textStyle,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-        )
-    }
+        highlighted = highlighted,
+        tabular = tabular
+    )
 }
 
 @Composable
@@ -301,24 +271,12 @@ internal fun SettingsCard(
     } else {
         modifier.fillMaxWidth()
     }
-    Surface(
+    TacticalCard(
         modifier = cardModifier,
-        shape = SettingsCardShape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = settingsCardBorder(highlighted = highlighted)
-    ) {
-        Column(Modifier.fillMaxWidth()) {
-            if (accentTopBar) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SettingsAccentBarHeight)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-            content()
-        }
-    }
+        highlighted = highlighted,
+        accentColor = if (accentTopBar) MaterialTheme.colorScheme.primary else null,
+        content = content
+    )
 }
 
 @Composable

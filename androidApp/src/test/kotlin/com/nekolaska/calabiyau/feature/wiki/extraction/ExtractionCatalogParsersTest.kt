@@ -97,8 +97,8 @@ class ExtractionCatalogParsersTest {
         assertEquals(listOf("刺针"), sources.map { it.name })
         assertEquals(3, pools.size)
         assertEquals(listOf("标准医疗格"), filterExtractionEntries(pools, "弦-5针剂", "地图场景容器", null,
-            false, ExtractionSort.DEFAULT, true).map { it.name })
-        assertTrue(filterExtractionEntries(pools, "弦-5针剂", "空投箱", null, false, ExtractionSort.DEFAULT, true).isEmpty())
+            null, ExtractionSort.DEFAULT, true).map { it.name })
+        assertTrue(filterExtractionEntries(pools, "弦-5针剂", "空投箱", null, null, ExtractionSort.DEFAULT, true).isEmpty())
         val medical = pools.single { it.name == "标准医疗格" }
         val matches = filterDropPoolGroups(medical.dropPoolGroups, " 弦-5针剂 ")
         assertEquals(1, matches.size)
@@ -168,12 +168,12 @@ class ExtractionCatalogParsersTest {
     }
 
     @Test fun filteringAndSortKeepZeroUnknownAndStableTiesCorrect() {
-        fun entry(id: String, value: Double?) = ExtractionEntry(id, id, "材料", tags = listOf("贵重"),
+        fun entry(id: String, value: Double?) = ExtractionEntry(id, id, "材料", materialTags = listOf("贵重"),
             numericValues = value?.let { mapOf(ExtractionSort.VALUE to it) }.orEmpty())
         val values = listOf(entry("unknown", null), entry("zero", 0.0), entry("two", 2.0), entry("tie", 2.0))
-        fun sorted(desc: Boolean) = filterExtractionEntries(values, "", null, null, true, ExtractionSort.VALUE, desc).map { it.id }
+        fun sorted(desc: Boolean) = filterExtractionEntries(values, "", null, null, "贵重", ExtractionSort.VALUE, desc).map { it.id }
         assertEquals(listOf("two", "tie", "zero", "unknown"), sorted(true))
         assertEquals(listOf("zero", "two", "tie", "unknown"), sorted(false))
-        assertEquals(listOf("two"), filterExtractionEntries(values, "two", "材料", null, true, ExtractionSort.DEFAULT, true).map { it.id })
+        assertEquals(listOf("two"), filterExtractionEntries(values, "two", "材料", null, "贵重", ExtractionSort.DEFAULT, true).map { it.id })
     }
 }

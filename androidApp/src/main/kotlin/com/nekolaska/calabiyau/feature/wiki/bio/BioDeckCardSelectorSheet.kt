@@ -1,23 +1,19 @@
 package com.nekolaska.calabiyau.feature.wiki.bio
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,26 +25,28 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
-import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
 import com.nekolaska.calabiyau.core.ui.catalogKeys
 import com.nekolaska.calabiyau.feature.wiki.bio.model.DeckCardOption
 import com.nekolaska.calabiyau.feature.wiki.bio.model.normalizeDeckQuality
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun BioDeckCardSelectorSheet(
     cards: List<DeckCardOption>,
     selectedIds: List<String>,
     images: Map<String, String?>,
+    rarityCounts: Map<String, Int>,
+    minimums: Map<String, Int>,
     onDismiss: () -> Unit,
     onToggle: (DeckCardOption) -> Unit
 ) {
@@ -73,6 +71,7 @@ internal fun BioDeckCardSelectorSheet(
         onQueryChange = { query = it },
         searchPlaceholder = "搜索卡牌名 / 品质…"
     ) {
+        item(key = "quality-summary") { BioDeckQualitySummary(rarityCounts, minimums) }
         if (filteredCards.isEmpty()) {
             item(key = "empty") {
                 CatalogEmptyResults(
@@ -90,15 +89,21 @@ internal fun BioDeckCardSelectorSheet(
             }
             val qualityColor = bioRarityColor(rarityLevel)
             val imageUrl = images[card.cardId]
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
-                SelectionOptionRow(
-                    label = card.name,
-                    selected = card.cardId in selectedIds,
-                    onClick = { onToggle(card) },
-                    leading = {
+            val isSelected = card.cardId in selectedIds
+            TacticalCard(
+                modifier = Modifier.semantics { selected = isSelected },
+                onClick = { onToggle(card) },
+                compact = true,
+                highlighted = isSelected
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+                ) {
                         Surface(
                             modifier = Modifier.size(48.dp),
-                            shape = AppShapes.chip,
+                            shape = TacticalStyle.iconFrameShape,
                             color = qualityColor.copy(alpha = 0.14f),
                             border = BorderStroke(1.dp, qualityColor.copy(alpha = 0.35f))
                         ) {
@@ -106,7 +111,7 @@ internal fun BioDeckCardSelectorSheet(
                                 if (!imageUrl.isNullOrBlank()) {
                                     AsyncImage(
                                         model = imageUrl,
-                                        contentDescription = card.name,
+                                        contentDescription = null,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
@@ -120,52 +125,18 @@ internal fun BioDeckCardSelectorSheet(
                                 }
                             }
                         }
-                    }
-                )
-                if (quality.isNotBlank() || card.index < 0) {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(AppShapes.chip)
-                            .clickable { onToggle(card) }
-                            .padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
-                    ) {
-                        if (quality.isNotBlank()) {
-                            Surface(
-                                shape = AppShapes.chip,
-                                color = qualityColor.copy(alpha = 0.14f),
-                                border = BorderStroke(1.dp, qualityColor.copy(alpha = 0.32f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .background(qualityColor, CircleShape)
-                                    )
-                                    Text(
-                                        text = quality,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
+                        Text(card.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        if (quality.isNotBlank()) BioColorBadge(quality, qualityColor)
                         if (card.index < 0) {
                             Text(
                                 text = "可加入卡组，暂不能生成分享码",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.align(Alignment.CenterVertically)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                    Checkbox(checked = isSelected, onCheckedChange = null)
                 }
             }
         }

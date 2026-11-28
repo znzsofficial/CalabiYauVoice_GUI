@@ -52,11 +52,14 @@ internal fun ExtractionItemDetailSheet(entry: ExtractionEntry, kind: ExtractionC
             ?.let { ExtractionField("描述", it) }
     }
     val primaryProse = remember(effects, descriptionField) { effects + listOfNotNull(descriptionField) }
-    val tags = remember(entry.tags, entry.category, entry.qualityLabel) {
-        entry.tags.distinct().filter { it.isNotBlank() && it != entry.category && it != entry.qualityLabel }
+    val tags = remember(entry.tags, entry.materialTags, entry.category, entry.qualityLabel) {
+        entry.tags.distinct().filter { it.isNotBlank() && it != entry.category && it != entry.qualityLabel && it !in entry.materialTags }
     }
-    val secondaryProse = remember(other, tags) {
-        other + listOfNotNull(tags.takeIf { it.isNotEmpty() }?.let { ExtractionField("标签", it.joinToString("、")) })
+    val secondaryProse = remember(other, tags, entry.materialTags) {
+        other + listOfNotNull(
+            entry.materialTags.takeIf { it.isNotEmpty() }?.let { ExtractionField("材料标签", it.joinToString("、")) },
+            tags.takeIf { it.isNotEmpty() }?.let { ExtractionField("标签", it.joinToString("、")) }
+        )
     }
     WikiContentSheet(onDismiss = onDismiss) {
         item("title") {

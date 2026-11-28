@@ -37,6 +37,16 @@ class ExtractionFieldGuideTest {
         assertTrue(GameModeParsers.parseModeWikitext(mode, "== 模式设定 ==\n* 模式地图：[[维里昂裂隙]]", emptyList()).chapters.isEmpty())
     }
 
+    @Test fun talentPrerequisitesKeepListBoundariesAndLinksInsideTheCell() {
+        val html = """<div class='mw-parser-output'><h2><span class='mw-headline'>角色天赋</span></h2>
+            <table class='klbqtable'><tr><th>解锁等级</th><th>天赋</th><th>附加前置</th></tr>
+            <tr><td>Lv18</td><td>工坊效果强化1</td><td><ul><li>生存等级 1</li><li><a href='/klbq/工坊'><b>工坊等级 1</b></a></li></ul></td></tr>
+            </table></div>"""
+        val block = GameModeParsers.parseModeWikitext(mode, "== 角色天赋 ==", emptyList(), html).chapters.single().blocks.single()
+        assertEquals("解锁等级：Lv18\n天赋：工坊效果强化1\n附加前置：\n• 生存等级 1\n• 工坊等级 1", block.content.text)
+        assertTrue(block.content.spans.single { it.text == "工坊等级 1" }.let { it.bold && it.url != null })
+    }
+
     @Test fun mapDoesNotMixDifficultyColumnsOrImportNavigation() {
         val wt = "{{地图|简介=维里昂|支持模式=弦溯战线|上线平台=PC端}}"
         val html = """<div class="mw-parser-output"><h2><span class="mw-headline">难度与准入</span></h2>
@@ -58,6 +68,8 @@ class ExtractionFieldGuideTest {
         assertTrue(WikiNavigationPolicy.mayLoadDocument(widget.originalUrl))
         assertEquals(WikiRoute.MapDetail(RIFT_MAP, null), matchingHubEntries("弦溯互动地图").first().targetRoute)
         assertEquals(WikiRoute.ExtractionMode, matchingHubEntries("局内事件").first().targetRoute)
+        assertEquals(WikiRoute.ExtractionMode, matchingHubEntries("调查等级").first().targetRoute)
+        assertEquals(WikiRoute.PlayerLevels, matchingHubEntries("玩家等级").first().targetRoute)
     }
 
     @Test fun completeNovember24RevisionsKeepAllMapAndModeRowsAndMatchWidgetDataIdentity() {

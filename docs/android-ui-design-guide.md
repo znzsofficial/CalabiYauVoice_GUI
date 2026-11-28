@@ -10,8 +10,14 @@
 
 | 语域 | 适用范围 | 核心气质与视觉特征 |
 | --- | --- | --- |
-| **A · 柔光画册**（MD3 Expressive 立体层级） | Wiki Hub 首页、二级聚合页、地图一览、各类图鉴页（道具、时装、武器外观、玩家装饰）与详情页（角色、武器、地图、图鉴弹层） | **无硬边框**；靠 `surfaceContainerLow` → `surfaceContainer` → `surfaceContainerHigh` 柔和色阶和 `18dp–24dp` G2 大圆角建立层次；让壁纸、立绘和图鉴原画成为视觉主角。 |
-| **B · 战术情报**（卡丘科幻精工终端） | 设置全套（首页与全部子页）、弦溯战线（搜打撤）全套（专题入口、掉落查询、物资／配件、枪械／防具、工坊及其详情弹层） | **利落线框与数值秩序**；统一 `12dp–14dp` 紧凑连续圆角、`1dp` 克制细线边框（`outlineVariant` ~55%）、Hero 与标本卡顶部 **`2dp` 强调顶线**、统一 `10dp` 细框图标底与等宽数字（`tnum`）。 |
+| **A · 柔光画册**（MD3 Expressive 立体层级） | Wiki Hub 首页、二级聚合页、地图一览、各类图鉴页（道具、时装、武器外观、玩家装饰、活动）与详情页（角色、武器、地图、图鉴弹层） | **无硬边框**；靠 `surfaceContainerLow` → `surfaceContainer` → `surfaceContainerHigh` 柔和色阶和 `18dp–24dp` G2 大圆角建立层次；让壁纸、立绘和图鉴原画成为视觉主角。 |
+| **B · 战术情报**（卡丘科幻精工终端） | 设置全套（首页与全部子页）、弦溯战线（搜打撤）全套（专题入口、掉落查询、物资／配件、枪械／防具、工坊及其详情弹层）、**平衡数据**、**PC 游戏设置** | **利落线框与数值秩序**；统一 `12dp–14dp` 紧凑连续圆角、`1dp` 克制细线边框（`outlineVariant` ~55%）、Hero 与重点推荐卡顶部 **`2dp` 强调顶线**、统一 `10dp` 细框图标底与等宽数字（`tnum`）。 |
+
+### 1.1 视觉语域拓展原则（新页面选型与局部借用）
+
+- **整页采用 B「战术情报」**：当玩家的唯一或核心任务是**查数值排名、比对参数档位、调开关或算配卡点数**，且页面没有大幅原画需要展示时（如设置、搜打撤、平衡数据、PC 游戏设置；后续可按同标准拓展到生化／推进卡牌构筑页）。
+- **整页保持 A「柔光画册」**：当页面以**壁纸、角色立绘、皮肤原画、地图插画或剧情长文**为主角时（如首页、角色／地图一览与详情、时装／武器外观、玩家装饰、活动详情），禁止整页套用 `1dp` 细框或 `2dp` 顶线，以免破坏画册呼吸感。
+- **A 语域详情页内局部借用 B 语域规格表**：图文混合详情页（如武器详情的伤害衰减表、弦能增幅网络、玩家等级经验表）外层继续保持 A 语域的柔和画册卡片，但内部的**纯数值矩阵或键值对网格**可直接复用 `TacticalSpecTile` 与 `tacticalTabular()` 等宽数字。
 
 ---
 
@@ -67,13 +73,48 @@
 
 - **专题入口（`ExtractionHubScreen`）**：保留 Hub 壁纸与液态玻璃采样；顶部为带 `2dp` 主色顶线的「掉落查询」终端 Hero 卡（主色实底「按物品」+ 细框浅底「按来源」）；中间「物资与装备」采用 **2×2 战术模块网格**（窄屏自动单列），含精框图标、语义色点与简短领域副标题，不退回 4 行设置风列表；下方「玩法资料」保持紧凑细框玻璃卡与「原文 ↗」窄栏适配。
 - **拒绝裸 ListView 分割线列表**：枪械、防具、工坊（配方／舱室／派驻／装修）及掉落列表统一使用 `12dp` 精工细框卡片（`Arrangement.spacedBy(8.dp)`），配精框图槽与属性小胶囊，**禁止**退回直接铺在页面背景上的 `Row + HorizontalDivider`。
+- **共用 Compose 样式**：弦溯专题、掉落来源卡和物资／配件卡及对应骨架从 `TacticalStyle` 取圆角、细框与顶线尺寸，图标框复用 `TacticalFramedIcon`，数值文本使用 `tacticalTabular()`。专题保留自己的壁纸采样和文字对比度计算；品质色、零掉落警示和命中高亮由实际内容决定。
 - **品质识别与数值表**：
   - 物资／配件标本卡、掉落物品头和装备／详情头使用 **`2dp` 顶部品质色强调线** 与精炼品质标签（`ExtractionDropQualityBadge` / `EquipmentQualityLabel`），不跨图鉴乱换算品质名。
    - 掉落卡将候选预览图与摘要收进柔和 `8dp` 预览舱内；装备对比与工坊材料统一放入 `12dp` 细框规格表／指标瓦片，数值一律 `tnum` 对齐，对比差异用主色高亮。
    - 比较多条掉落概率时，来源在左、百分比在行末对齐，池和品质留在次行。若字号或来源名使同一行放不下，百分比整体换行，不截断来源名，也不拆开数字与 `%`。窄屏与深色对照可用 `DropRateLayoutPreview`。
   - 详情弹层底部使用紧凑 `FilledTonalButton` 或双动作栏收口，不用突兀的全宽裸 `TextButton("关闭")`。
 
+### 3.3 平衡数据与 PC 游戏设置（以及 `TacticalStyle` 共享 Compose 原语）
+
+B 语域已抽离为公共 Compose 样式与组件包 [`core/ui/TacticalStyle.kt`](../androidApp/src/main/kotlin/com/nekolaska/calabiyau/core/ui/TacticalStyle.kt)，新工具页或数据表可直接套用，不在各模块重复手写圆角、线框与 `tnum` 样式：
+
+| 原语 / Token | 作用与视觉规格 |
+| --- | --- |
+| `TacticalStyle` | 集中定义 `cardRadius (14dp)`、`compactCardRadius (12dp)`、`tileRadius (10dp)`、`iconFrameRadius (10dp)`、`badgeRadius (8dp)`、`accentBarHeight (2dp)`，以及 `cardBorder(highlighted)`、`tileBorder(highlighted)`、`dividerColor()`。 |
+| `TextStyle.tacticalTabular()` | 为胜率、KD、伤害、帧率、渲染比例、版本号等开启 `fontFeatureSettings = "tnum"` 等宽数字。 |
+| `TacticalCard` | B 语域标准容器：支持 `compact`（`12dp`/`14dp`）、`highlighted` 描边、`accentColor`（非空时自动绘制顶部 `2dp` 强调色线）及可选 `onClick`。`SettingsCard` 直接委托此组件。 |
+| `TacticalFramedIcon` | `36dp`（可调尺寸）+ `10dp` 圆角 + `surfaceContainerHigh` + `1dp` 细框图标槽，`SettingsFramedIcon` 直接委托此组件。 |
+| `TacticalBadge` | 带 `1dp` 细框的紧凑胶囊，支持前置色点、`highlighted` 主色容器与 `tabular` 等宽数字。 |
+| `TacticalSectionHeader` | `6dp` 圆角主色方点 + 粗体标题 + 右侧计数胶囊／动作，取代被禁止的 `4dp × 20dp` 左侧竖条。 |
+| `TacticalSpecTile` | `10dp` 细框规格瓦片（`surfaceContainer` + `1dp` 细框），用于展示「标签 + `tnum` 数值 + 可选对比基线／涨跌差值」。 |
+
+- **平衡数据（`BalanceDataScreen` / `BalanceHeroCard`）**：顶部「统计范围」摘要卡使用带 `2dp` 主色顶线的 `TacticalCard` 与 `TacticalFramedIcon`；前三名角色卡带 `2dp` 主色顶线与高亮 `#1–#3` 徽标，其余名次用中性细顶线；胜率主读数与下方四项指标（选取率、KD、场均伤害、表现分）全部使用 `tacticalTabular()` 与 `TacticalSpecTile` 对齐，赛季对比差值在瓦片内直接成组展示。筛选弹层使用 `WikiSheetFrame`、细框分组卡与底部紧凑双动作栏。
+- **PC 游戏设置（`PcGameSettingsScreen` / `PcGameSettingsComponents`）**：分区标题统一使用 `TacticalSectionHeader`（移除旧版左侧 `4dp` 竖条）；推荐速查项（`isQuickReference`）使用带 `2dp` 主色顶线的 `TacticalCard` 与高亮「Wiki 建议」徽标；技术参考表（如超分渲染比例）使用 `TacticalSpecTile` 双列规格网格；详情弹层中的默认值、附加字段与本节说明全部统一为 `12dp` 细框战术卡。
+- **平衡数据窄屏收尾**：「统计范围」的条件独占一行并允许自然换行，对比赛季留在标题旁；排序栏常驻当前指标与升降序，点指标打开纵向菜单，点方向直接切换，避免把选项藏在横滑列表里。
+
 ---
+
+### 3.4 生化卡牌与卡组
+
+- 卡牌列表保留原画和品质／阵营色；细框卡使用 `TacticalCard`，品质顶线和 `TacticalBadge` 由卡牌资料提供。窄屏先读卡名，再读品质和效果；筛选摘要可换行。
+- 卡组编辑与选卡弹层共用同一块品质统计：分别显示已选张数、最低要求、当前是否达标，单品质上限另列。使用 `TacticalSpecTile`；窄屏按字号减少列数。选择候选卡仍使用可搜索的纵向列表，整行切换一次，缺分享索引的卡保留提示。
+- 弦溯枪械／防具列表、工坊配方和单件率也复用相同的顶线尺寸、细框或等宽数字。各自的品质色、数值语义及交互留在页面内。
+
+### 3.5 超弦推进卡牌
+
+- 搜索行右侧进入「筛选与排序」，分类、适用角色、品质与排序在弹层内纵向浏览，列表上方用可换行的徽标显示结果数和已选条件。重置筛选保留搜索词。
+- 卡图保留，品质顶线、徽标和效果数值使用 `TacticalCard`、`TacticalBadge` 与 `tacticalTabular()`。宽屏用网格，窄屏大字号减少列数；无适用角色标签时不预留空条。推进页是资料图鉴，沿用已有筛选与排序。
+
+### 3.6 资料页局部借用
+
+- **超弦体天赋**：首屏直接从天赋分组开始。分组标题已带条目数，每张卡已标解锁和满级，省去重复的顶部统计卡。分组与图标沿用柔光布局，等级徽标和逐级效果使用等宽数字。
+- **武器详情**：只在伤害表使用等宽数字，继续按距离、部位及蓄力状态分组，保留头图与共享转场布局。
 
 ## 4. 禁止回退的设计红线（改 UI 前必查）
 

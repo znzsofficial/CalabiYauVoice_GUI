@@ -14,7 +14,6 @@ import com.nekolaska.calabiyau.core.ui.catalogKeys
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,13 +25,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,10 +51,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
@@ -65,6 +67,11 @@ import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
+import com.nekolaska.calabiyau.core.ui.TacticalBadge
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalSectionHeader
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
@@ -108,6 +115,7 @@ fun StringerPushCardScreen(
     var role by rememberSaveable { mutableStateOf("全部角色") }
     var rarity by rememberSaveable { mutableIntStateOf(0) }
     var sortOption by rememberSaveable { mutableStateOf(PushCardSortOption.RARITY_DESC) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
     var selectedCard by remember { mutableStateOf<ModeCard?>(null) }
 
     val page = state.data
@@ -138,10 +146,21 @@ fun StringerPushCardScreen(
         }
     }
 
+    val conditions = listOfNotNull(
+        category.takeUnless { it == "全部分类" }, role.takeUnless { it == "全部角色" },
+        rarityLabel(rarity).takeIf { rarity != 0 }, sortOption.label.takeUnless { sortOption == PushCardSortOption.RARITY_DESC }
+    )
+    fun resetFilters() {
+        category = "全部分类"
+        role = "全部角色"
+        rarity = 0
+        sortOption = PushCardSortOption.RARITY_DESC
+    }
+    val minimumCardWidth = 168.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("超弦推进卡牌 ${filteredCards.size}", fontWeight = FontWeight.Bold) },
+                title = { Text("超弦推进卡牌", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
                     RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
@@ -155,10 +174,10 @@ fun StringerPushCardScreen(
             modifier = Modifier.padding(innerPadding),
             isDataEmpty = { it.cards.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> StringerPushCardSkeleton(mod) }
+            loading = { mod -> StringerPushCardSkeleton(minimumCardWidth, mod) }
         ) {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(168.dp),
+                columns = GridCells.Adaptive(minimumCardWidth),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -166,14 +185,11 @@ fun StringerPushCardScreen(
             ) {
                 if (page.summary.isNotBlank()) {
                     item(key = "summary", span = { GridItemSpan(maxLineSpan) }) {
-                        Card(
-                            shape = smoothCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                        ) {
+                        TacticalCard(compact = true) {
                             Text(
                                 page.summary,
-                                modifier = Modifier.padding(20.dp),
-                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -181,67 +197,31 @@ fun StringerPushCardScreen(
                 }
 
                 item(key = "search", span = { GridItemSpan(maxLineSpan) }) {
-                    SearchBar(
-                        keyword = keyword,
-                        onKeywordChange = { keyword = it },
-                        onClear = { keyword = "" },
-                        isSearching = state.isLoading,
-                        placeholder = "搜索卡牌 / 效果 / 适用角色"
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SearchBar(
+                            modifier = Modifier.weight(1f), keyword = keyword,
+                            onKeywordChange = { keyword = it }, onClear = { keyword = "" },
+                            isSearching = state.isLoading, placeholder = "搜索卡牌、效果或角色"
+                        )
+                        FilledTonalIconButton(
+                            onClick = { showFilters = true }, modifier = Modifier.size(48.dp), shape = TacticalStyle.iconFrameShape
+                        ) {
+                            BadgedBox(badge = { if (conditions.isNotEmpty()) Badge() }) {
+                                Icon(Icons.Outlined.FilterAlt, contentDescription = "筛选与排序")
+                            }
+                        }
+                    }
                 }
 
                 item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
-                    Card(
-                        shape = smoothCornerShape(24.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(20.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.FilterAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.size(8.dp))
-                                Text("筛选", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(Modifier.weight(1f)) {
-                                    SimpleDropdownSelector(
-                                        label = "分类",
-                                        options = categories,
-                                        selected = category,
-                                        onSelected = { category = it }
-                                    )
-                                }
-                                Box(Modifier.weight(1f)) {
-                                    EnumDropdownSelector(
-                                        label = "排序",
-                                        options = PushCardSortOption.entries,
-                                        selected = sortOption,
-                                        onSelected = { sortOption = it }
-                                    )
-                                }
-                            }
-                            CharacterSelector(
-                                label = "适用角色",
-                                options = roleOptions,
-                                selectedName = role.takeUnless { it == "全部角色" },
-                                onSelectedNameChange = { role = it ?: "全部角色" },
-                                allLabel = "全部角色"
-                            )
-                            RarityChips(selectedRarity = rarity, onRarityChange = { rarity = it })
-                        }
-                    }
+                    PushCardFilterSummary(filteredCards.size, conditions, ::resetFilters)
                 }
 
                 if (filteredCards.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         CatalogEmptyResults(message = "没有匹配的卡牌", onClear = {
-                            keyword = ""; category = "全部分类"; role = "全部角色"; rarity = 0
+                            keyword = ""
+                            resetFilters()
                         })
                     }
                 } else {
@@ -255,6 +235,24 @@ fun StringerPushCardScreen(
         }
     }
 
+    if (showFilters) WikiScrollableSheet(onDismiss = { showFilters = false }) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TacticalSectionHeader("筛选与排序")
+            SimpleDropdownSelector(label = "分类", options = categories, selected = category, onSelected = { category = it })
+            CharacterSelector(
+                label = "适用角色", options = roleOptions,
+                selectedName = role.takeUnless { it == "全部角色" },
+                onSelectedNameChange = { role = it ?: "全部角色" }, allLabel = "全部角色"
+            )
+            RarityChips(selectedRarity = rarity, onRarityChange = { rarity = it })
+            EnumDropdownSelector("排序", PushCardSortOption.entries, sortOption) { sortOption = it }
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = ::resetFilters, enabled = conditions.isNotEmpty()) { Text("重置筛选") }
+                TextButton(onClick = { showFilters = false }) { Text("完成") }
+            }
+        }
+    }
+
     selectedCard?.let { card ->
         WikiScrollableSheet(onDismiss = { selectedCard = null }) {
             Column(
@@ -264,14 +262,15 @@ fun StringerPushCardScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(card.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(
-                    listOf(card.category, rarityLabel(card.rarity)).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(card.effect, style = MaterialTheme.typography.bodyLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PushCardRarityBadge(card.rarity)
+                    if (card.category.isNotBlank()) TacticalBadge(card.category)
+                }
+                if (card.effect.isNotBlank()) TacticalCard(compact = true) {
+                    Text(card.effect, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge.tacticalTabular())
+                }
                 if (card.roles.isNotEmpty()) {
-                    HorizontalDivider()
+                    HorizontalDivider(color = TacticalStyle.dividerColor())
                     Text("适用角色", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(card.roles.joinToString("、"), style = MaterialTheme.typography.bodyMedium)
                 }
@@ -282,74 +281,47 @@ fun StringerPushCardScreen(
 }
 
 @Composable
-private fun StringerPushCardSkeleton(modifier: Modifier = Modifier) {
-    LazyColumn(
+internal fun PushCardFilterSummary(count: Int, conditions: List<String>, onReset: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            TacticalBadge("$count 张卡牌", tabular = true)
+            conditions.forEach { TacticalBadge(it) }
+        }
+        if (conditions.isNotEmpty()) TextButton(onClick = onReset) { Text("重置") }
+    }
+}
+
+@Composable
+private fun StringerPushCardSkeleton(minimumCardWidth: Dp, modifier: Modifier = Modifier) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minimumCardWidth),
         modifier = modifier.fillMaxSize(),
+        userScrollEnabled = false,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            ShimmerBox(
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = smoothCornerShape(26.dp)
-            )
-        }
-        item {
-            Card(
-                shape = smoothCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ShimmerBox(Modifier.width(88.dp).height(20.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
-                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
-                    }
-                    ShimmerBox(Modifier.fillMaxWidth().height(56.dp), shape = smoothCornerShape(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        repeat(3) { index ->
-                            ShimmerBox(
-                                Modifier.width((72 - index * 4).dp).height(32.dp),
-                                shape = smoothCornerShape(16.dp)
-                            )
-                        }
-                    }
-                }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            TacticalCard(compact = true) {
+                ShimmerBox(Modifier.padding(12.dp).fillMaxWidth(0.8f).height(16.dp))
             }
         }
-        item {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val cardMinWidth = 168.dp
-                val columns = (maxWidth / cardMinWidth).toInt().coerceAtLeast(1)
-                val cardWidth = (maxWidth - (12.dp * (columns - 1))) / columns
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    maxItemsInEachRow = columns
-                ) {
-                    repeat(columns * 3) {
-                        Box(modifier = Modifier.width(cardWidth)) {
-                            StringerPushCardSkeletonItem()
-                        }
-                    }
-                }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ShimmerBox(Modifier.weight(1f).height(52.dp), shape = smoothCornerShape(26.dp))
+                ShimmerBox(Modifier.size(48.dp), shape = TacticalStyle.iconFrameShape)
             }
         }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            ShimmerBox(Modifier.width(76.dp).height(24.dp), shape = TacticalStyle.badgeShape)
+        }
+        items(8) { StringerPushCardSkeletonItem() }
     }
 }
 
 @Composable
 private fun StringerPushCardSkeletonItem() {
-    Card(
-        shape = smoothCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    TacticalCard(compact = true, accentColor = MaterialTheme.colorScheme.outlineVariant) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -359,7 +331,7 @@ private fun StringerPushCardSkeletonItem() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ShimmerBox(Modifier.size(56.dp), shape = smoothCornerShape(16.dp))
+                ShimmerBox(Modifier.size(56.dp), shape = TacticalStyle.iconFrameShape)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ShimmerBox(Modifier.fillMaxWidth(0.7f).height(18.dp))
                     ShimmerBox(Modifier.fillMaxWidth(0.9f).height(14.dp))
@@ -373,15 +345,15 @@ private fun StringerPushCardSkeletonItem() {
 }
 
 @Composable
-private fun ModeCardGridItem(
+internal fun ModeCardGridItem(
     card: ModeCard,
     onClick: () -> Unit
 ) {
-    Card(
+    val accent = rarityColor(card.rarity)
+    TacticalCard(
         onClick = onClick,
-        shape = smoothCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        compact = true,
+        accentColor = accent
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -393,9 +365,9 @@ private fun ModeCardGridItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = smoothCornerShape(16.dp),
-                    color = rarityColor(card.rarity).copy(alpha = 0.15f),
-                    border = BorderStroke(1.5.dp, rarityColor(card.rarity).copy(alpha = 0.4f)),
+                    shape = TacticalStyle.iconFrameShape,
+                    color = accent.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.4f)),
                     modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -416,32 +388,28 @@ private fun ModeCardGridItem(
                         card.name, 
                         style = MaterialTheme.typography.titleMedium, 
                         fontWeight = FontWeight.Bold, 
-                        maxLines = 1, 
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        listOf(card.category, rarityLabel(card.rarity)).filter { it.isNotBlank() }.joinToString(" · "),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    PushCardRarityBadge(card.rarity)
+                    if (card.category.isNotBlank()) {
+                        Text(card.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             Text(
                 card.effect,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.tacticalTabular(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = TextUnit(1.4f, TextUnitType.Em)
             )
-            val hasRoles = card.roles.isNotEmpty()
-            Surface(
-                shape = smoothCornerShape(8.dp),
-                color = if (hasRoles) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
-                contentColor = if (hasRoles) MaterialTheme.colorScheme.primary else Color.Transparent
+            if (card.roles.isNotEmpty()) Surface(
+                shape = TacticalStyle.badgeShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                border = TacticalStyle.tileBorder()
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -460,6 +428,15 @@ private fun ModeCardGridItem(
             }
         }
     }
+}
+
+@Composable
+private fun PushCardRarityBadge(rarity: Int) {
+    val color = rarityColor(rarity)
+    TacticalBadge(
+        text = rarityLabel(rarity), dotColor = color,
+        containerColor = color.copy(alpha = 0.14f), borderColor = color.copy(alpha = 0.32f)
+    )
 }
 
 @Composable

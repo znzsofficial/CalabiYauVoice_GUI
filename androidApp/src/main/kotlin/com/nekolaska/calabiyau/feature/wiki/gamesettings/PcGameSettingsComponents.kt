@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.gamesettings
 
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,11 +43,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.DetailField
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
+import com.nekolaska.calabiyau.core.ui.TacticalBadge
+import com.nekolaska.calabiyau.core.ui.TacticalCard
+import com.nekolaska.calabiyau.core.ui.TacticalFramedIcon
+import com.nekolaska.calabiyau.core.ui.TacticalSectionHeader
+import com.nekolaska.calabiyau.core.ui.TacticalSpecTile
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.WikiContentSheet
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsBlock
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsSection
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsView
@@ -59,44 +62,35 @@ import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.pcSettingsSearchT
 internal fun PcSettingsListHeader(view: PcSettingsView, category: String, countLabel: String, onReset: (() -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 36.dp),
+            Modifier.fillMaxWidth().heightIn(min = 34.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Surface(
-                shape = AppShapes.chip,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                Text(
-                    "$category · $countLabel",
-                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            TacticalBadge(
+                text = "$category · $countLabel",
+                tabular = true
+            )
             Spacer(Modifier.weight(1f))
             if (onReset != null) TextButton(onClick = onReset) { Text("重置") }
         }
-        Surface(
-            shape = AppShapes.compactCard,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        TacticalCard(
+            compact = true,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            border = TacticalStyle.tileBorder()
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    when (view) {
+                TacticalFramedIcon(
+                    icon = when (view) {
                         PcSettingsView.SETTINGS -> Icons.Outlined.Tune
                         PcSettingsView.RECOMMENDATIONS -> Icons.Outlined.AutoAwesome
                         PcSettingsView.KNOWLEDGE -> Icons.Outlined.Lightbulb
                     },
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    size = 28.dp,
+                    iconSize = 15.dp
                 )
                 Text(
                     when (view) {
@@ -118,38 +112,13 @@ internal fun LazyListScope.pcSettingsItems(
     val terms = pcSettingsSearchTerms(query)
     sections.forEach { section ->
         item(key = "heading:${section.id}", contentType = "section") {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp).semantics { heading() },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    Modifier.width(4.dp).height(20.dp)
-                        .background(MaterialTheme.colorScheme.primary, smoothCornerShape(2.dp))
-                )
-                Text(
-                    section.title,
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                val count = if (section.view == PcSettingsView.KNOWLEDGE) section.blocks.size
-                    else section.blocks.count { it is PcSettingsBlock.Setting }
-                if (count > 0) {
-                    Surface(
-                        shape = AppShapes.chip,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        Text(
-                            "$count",
-                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
+            val count = if (section.view == PcSettingsView.KNOWLEDGE) section.blocks.size
+                else section.blocks.count { it is PcSettingsBlock.Setting }
+            TacticalSectionHeader(
+                title = section.title,
+                countText = count.takeIf { it > 0 }?.toString(),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+            )
         }
         var previousGroup = ""
         section.blocks.forEach { block ->
@@ -161,7 +130,7 @@ internal fun LazyListScope.pcSettingsItems(
                     Text(
                         group,
                         Modifier.padding(top = 6.dp, bottom = 2.dp).semantics { heading() },
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.4.sp),
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -188,14 +157,13 @@ internal fun LazyListScope.pcSettingsItems(
 
 @Composable
 private fun PcSettingsReferenceRow(modifier: Modifier, block: PcSettingsBlock.Reference) {
-    Surface(
-        modifier.fillMaxWidth(),
-        shape = AppShapes.compactCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+    TacticalCard(
+        modifier = modifier,
+        compact = true,
+        accentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
     ) {
         SelectionContainer {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         block.nameLabel,
@@ -205,42 +173,41 @@ private fun PcSettingsReferenceRow(modifier: Modifier, block: PcSettingsBlock.Re
                     )
                     Text(
                         block.name,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.tacticalTabular(),
                         fontWeight = FontWeight.SemiBold
                     )
                 }
                 if (block.fields.isNotEmpty()) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        block.fields.chunked(2).forEach { pair ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                pair.forEach { field ->
-                                    Surface(
-                                        Modifier.weight(1f),
-                                        shape = smoothCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainer
+                    HorizontalDivider(color = TacticalStyle.dividerColor())
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val twoColumns = maxWidth >= 260.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (twoColumns) {
+                                block.fields.chunked(2).forEach { pair ->
+                                    Row(
+                                        Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Max),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Column(
-                                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Text(
-                                                field.label,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                field.value.ifBlank { "原文未注明" },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold
+                                        pair.forEach { field ->
+                                            TacticalSpecTile(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                label = field.label,
+                                                value = field.value.ifBlank { "原文未注明" },
+                                                tabular = true
                                             )
                                         }
+                                        if (pair.size == 1) Spacer(Modifier.weight(1f))
                                     }
                                 }
-                                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            } else {
+                                block.fields.forEach { field ->
+                                    TacticalSpecTile(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = field.label,
+                                        value = field.value.ifBlank { "原文未注明" },
+                                        tabular = true
+                                    )
+                                }
                             }
                         }
                     }
@@ -252,54 +219,42 @@ private fun PcSettingsReferenceRow(modifier: Modifier, block: PcSettingsBlock.Re
 
 @Composable
 private fun PcSettingRow(modifier: Modifier, setting: PcSettingsBlock.Setting, terms: List<String>, onClick: () -> Unit) {
-    Surface(
+    TacticalCard(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = AppShapes.compactCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(
-            1.dp,
-            if (setting.isQuickReference) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        )
+        modifier = modifier,
+        compact = true,
+        highlighted = setting.isQuickReference,
+        accentColor = if (setting.isQuickReference) MaterialTheme.colorScheme.primary else null
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     setting.name,
                     Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
                 )
                 Icon(
                     Icons.Outlined.ChevronRight,
                     contentDescription = "查看设置详情",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.size(18.dp)
                 )
             }
             val primaryLabel = if (setting.isQuickReference) "推荐" else "默认"
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    shape = smoothCornerShape(8.dp),
-                    color = if (setting.isQuickReference) MaterialTheme.colorScheme.secondaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                ) {
-                    Text(
-                        if (setting.isQuickReference) "Wiki 建议" else "默认",
-                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (setting.isQuickReference) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                TacticalBadge(
+                    text = if (setting.isQuickReference) "Wiki 建议" else "默认",
+                    modifier = Modifier.padding(top = 2.dp),
+                    highlighted = setting.isQuickReference
+                )
                 Text(
                     setting.field(primaryLabel)?.takeIf(String::isNotBlank) ?: "原文未注明",
                     Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.tacticalTabular(),
                     fontWeight = FontWeight.SemiBold,
                     color = if (setting.isQuickReference) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 4,
@@ -388,17 +343,7 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         tags.forEach { tag ->
-                            Surface(
-                                shape = AppShapes.chip,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ) {
-                                Text(
-                                    tag,
-                                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            TacticalBadge(text = tag)
                         }
                     }
                 }
@@ -406,18 +351,18 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
         }
         setting.field(primaryLabel)?.let { value ->
             item(key = "primary-value") {
-                Surface(
-                    shape = AppShapes.compactCard,
-                    color = if (setting.isQuickReference) MaterialTheme.colorScheme.secondaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(
-                        1.dp,
-                        if (setting.isQuickReference) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                    )
+                TacticalCard(
+                    compact = true,
+                    highlighted = setting.isQuickReference,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    containerColor = if (setting.isQuickReference) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainer
+                    }
                 ) {
                     SelectionContainer {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -426,20 +371,18 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
                                     if (setting.isQuickReference) Icons.Outlined.AutoAwesome else Icons.Outlined.Tune,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
-                                    tint = if (setting.isQuickReference) MaterialTheme.colorScheme.onSecondaryContainer
-                                    else MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                                 Text(
                                     fieldLabel(primaryLabel),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (setting.isQuickReference) MaterialTheme.colorScheme.onSecondaryContainer
-                                    else MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                             Text(
                                 value.ifBlank { "原文未注明" },
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleMedium.tacticalTabular(),
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -448,9 +391,10 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
             }
         }
         if (setting.isQuickReference || setting.field("推荐") != null) item(key = "advice-note") {
-            Surface(
-                shape = AppShapes.compactCard,
-                color = MaterialTheme.colorScheme.surfaceContainer
+            TacticalCard(
+                compact = true,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                border = TacticalStyle.tileBorder()
             ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -473,16 +417,16 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
         }
         if (extraFields.isNotEmpty()) {
             item(key = "fields-card") {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainer
+                TacticalCard(
+                    compact = true,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    border = TacticalStyle.tileBorder()
                 ) {
                     SelectionContainer {
-                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             extraFields.forEachIndexed { index, field ->
                                 if (index > 0) {
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                    HorizontalDivider(color = TacticalStyle.dividerColor())
                                 }
                                 DetailField(
                                     label = fieldLabel(field.label),
@@ -496,20 +440,18 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
         }
         if (notes.isNotEmpty()) {
             item(key = "notes-title") {
-                Text(
-                    "本节说明",
-                    Modifier.padding(top = 4.dp).semantics { heading() },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                TacticalSectionHeader(
+                    title = "本节说明",
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             item(key = "notes-card") {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = AppShapes.card,
-                    color = MaterialTheme.colorScheme.surfaceContainer
+                TacticalCard(
+                    compact = true,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    border = TacticalStyle.tileBorder()
                 ) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         notes.forEach { PcSettingsParagraph(block = it) }
                     }
                 }
@@ -522,13 +464,13 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
 @Composable
 internal fun PcSettingsSkeleton(modifier: Modifier = Modifier, knowledge: Boolean, header: @Composable () -> Unit) {
     val typography = MaterialTheme.typography
-    val headingHeight = with(LocalDensity.current) { typography.titleLarge.lineHeight.toDp() }
-    val titleHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
+    val headingHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
+    val titleHeight = with(LocalDensity.current) { typography.titleSmall.lineHeight.toDp() }
     val valueHeight = with(LocalDensity.current) { typography.bodyLarge.lineHeight.toDp() }
     val bodyHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
     LazyColumn(
         modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         userScrollEnabled = false
     ) {
         item("source-note") { header() }
@@ -545,15 +487,11 @@ internal fun PcSettingsSkeleton(modifier: Modifier = Modifier, knowledge: Boolea
                     SkeletonTextLine(widthFraction = .9f)
                     SkeletonTextLine(widthFraction = .65f)
                 }
-            } else Surface(
-                shape = AppShapes.compactCard,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-            ) {
-                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            } else TacticalCard(compact = true) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         SkeletonTextLine(Modifier.weight(1f), widthFraction = .65f, height = titleHeight)
-                        Spacer(Modifier.size(24.dp))
+                        Spacer(Modifier.size(18.dp))
                     }
                     SkeletonTextLine(widthFraction = .5f, height = valueHeight)
                     SkeletonTextLine(widthFraction = .9f, height = bodyHeight)

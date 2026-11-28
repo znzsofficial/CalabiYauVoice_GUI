@@ -48,32 +48,34 @@ fun ExtractionCatalogScreen(
     var quality by rememberSaveable(kind) { mutableStateOf<Int?>(null) }
     var sort by rememberSaveable(kind) { mutableStateOf(ExtractionSort.DEFAULT) }
     var descending by rememberSaveable(kind) { mutableStateOf(true) }
-    var valuableOnly by rememberSaveable(kind) { mutableStateOf(false) }
+    var materialTag by rememberSaveable(kind) { mutableStateOf<String?>(null) }
     var showFilters by rememberSaveable(kind) { mutableStateOf(false) }
     var selectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
     val categories = remember(entries) { entries.map { it.filterCategory }.distinct() }
+    val materialTags = remember(entries, kind) { if (kind == ExtractionCatalogKind.LOOT) availableMaterialTags(entries) else emptyList() }
     val qualities = remember(entries) { entries.mapNotNull { e -> e.quality?.let { it to e.qualityLabel } }.distinctBy { it.first }.sortedBy { it.first } }
     val sorts = remember(entries) { ExtractionSort.entries.filter { s -> s == ExtractionSort.DEFAULT || entries.any { s in it.numericValues } } }
     LaunchedEffect(entries, state.isShowingCachedPrefetch) {
         if (entries.isNotEmpty() && !state.isShowingCachedPrefetch) {
             if (category !in categories) category = null
             if (qualities.none { it.first == quality }) quality = null
+            if (materialTag !in materialTags) materialTag = null
             if (sort !in sorts) sort = ExtractionSort.DEFAULT
         }
     }
-    val filtered = remember(entries, query, category, quality, valuableOnly, sort, descending) {
-        filterExtractionEntries(entries, query, category, quality, valuableOnly, sort, descending)
+    val filtered = remember(entries, query, category, quality, materialTag, sort, descending) {
+        filterExtractionEntries(entries, query, category, quality, materialTag, sort, descending)
     }
     val focus = LocalFocusManager.current
     val conditions = listOfNotNull(
         category,
         qualities.find { it.first == quality }?.second,
-        "仅贵重物品".takeIf { valuableOnly },
+        materialTag,
         sort.takeUnless { it == ExtractionSort.DEFAULT }?.let {
             "${it.label}${if (descending) "降序" else "升序"}"
         }
     )
-    fun clearFilters() { category = null; quality = null; valuableOnly = false }
+    fun clearFilters() { category = null; quality = null; materialTag = null }
     fun resetOptions() { clearFilters(); sort = ExtractionSort.DEFAULT; descending = true }
     val wikiUrl = extractionArticleUrl(kind.pageName)
     val subject = if (kind == ExtractionCatalogKind.LOOT) "物资" else "配件"
@@ -143,7 +145,7 @@ fun ExtractionCatalogScreen(
                     ExtractionEmptyResults(
                         message = if (entries.isEmpty()) "暂无$subject" else "没有符合条件的$subject",
                         onClearQuery = if (query.isNotEmpty()) ({ query = "" }) else null,
-                        onClearFilters = if (category != null || quality != null || valuableOnly) ::clearFilters else null
+                        onClearFilters = if (category != null || quality != null || materialTag != null) ::clearFilters else null
                     )
                 }
                 gridItems(filtered, key = { it.id }) { entry ->
@@ -153,8 +155,8 @@ fun ExtractionCatalogScreen(
         }
     }
     if (showFilters && isActive()) ExtractionFilterSheet(
-        kind, categories, qualities, sorts, category, quality, valuableOnly, sort, descending,
-        onCategory = { category = it }, onQuality = { quality = it }, onValuable = { valuableOnly = it },
+        kind, categories, qualities, materialTags, sorts, category, quality, materialTag, sort, descending,
+        onCategory = { category = it }, onQuality = { quality = it }, onMaterialTag = { materialTag = it },
         onSort = { sort = it }, onDescending = { descending = it },
         onClear = if (conditions.isNotEmpty()) ::resetOptions else null,
         onDismiss = { showFilters = false }
@@ -180,7 +182,7 @@ internal fun ColumnScope.ExtractionItemImageHeader(
     artwork: @Composable () -> Unit,
     badge: @Composable () -> Unit
 ) {
-    Spacer(Modifier.fillMaxWidth().height(2.dp).background(accent))
+    Spacer(Modifier.fillMaxWidth().height(TacticalStyle.accentBarHeight).background(accent))
     Box(Modifier.extractionItemImageSlot().background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center) {
         artwork()
@@ -196,9 +198,9 @@ private fun ExtractionItemCard(kind: ExtractionCatalogKind, entry: ExtractionEnt
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+        border = TacticalStyle.cardBorder()
     ) {
         ExtractionItemImageHeader(
             accent = qualityColor,
@@ -257,7 +259,7 @@ private fun ExtractionItemCard(kind: ExtractionCatalogKind, entry: ExtractionEnt
                             )
                             Text(
                                 valueText,
-                                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                style = MaterialTheme.typography.labelSmall.tacticalTabular(),
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.onSurface,
                                 maxLines = 1,

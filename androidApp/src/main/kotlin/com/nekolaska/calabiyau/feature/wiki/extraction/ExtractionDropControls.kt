@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
+import com.nekolaska.calabiyau.core.ui.TacticalStyle
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.tacticalTabular
 
 /** One predictable action row below search, shared by both tasks and pool details. */
 @Composable
@@ -42,7 +44,7 @@ internal fun DropFilterBar(
         Text(
             summary,
             Modifier.align(Alignment.CenterVertically).padding(end = 8.dp),
-            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.bodySmall.tacticalTabular(),
             color = colors.onSurfaceVariant
         )
         Surface(
@@ -88,7 +90,7 @@ internal fun DropFilterBar(
                         Text(
                             activeCount.toString(),
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                            style = MaterialTheme.typography.labelSmall.tacticalTabular(),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -109,9 +111,9 @@ internal fun ExtractionEmptyResults(
     val colors = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         color = colors.surfaceContainerLow,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f))
+        border = TacticalStyle.tileBorder()
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 22.dp),
@@ -120,7 +122,7 @@ internal fun ExtractionEmptyResults(
         ) {
             Text(
                 message,
-                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.bodyMedium.tacticalTabular(),
                 color = colors.onSurfaceVariant
             )
             if (onShowZero != null || onClearQuery != null || onClearFilters != null) {
@@ -173,9 +175,9 @@ internal fun DropLookupRowSkeleton(modifier: Modifier = Modifier, source: Boolea
     val badgeHeight = with(LocalDensity.current) { typography.labelSmall.lineHeight.toDp() } + 6.dp
     Surface(
         modifier.clearAndSetSemantics {},
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        border = TacticalStyle.tileBorder()
     ) {
         Row(
             Modifier.fillMaxWidth().padding(12.dp),
@@ -209,13 +211,13 @@ internal fun DropSourceCardSkeleton(modifier: Modifier = Modifier) {
     val bodyHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
     Surface(
         modifier.clearAndSetSemantics {},
-        shape = smoothCornerShape(12.dp),
+        shape = TacticalStyle.compactCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        border = TacticalStyle.tileBorder()
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ShimmerBox(Modifier.size(40.dp), shape = smoothCornerShape(10.dp))
+                ShimmerBox(Modifier.size(40.dp), shape = TacticalStyle.iconFrameShape)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SkeletonTextLine(widthFraction = 0.65f, height = titleHeight)
                     SkeletonTextLine(widthFraction = 0.4f, height = bodyHeight)
@@ -224,7 +226,7 @@ internal fun DropSourceCardSkeleton(modifier: Modifier = Modifier) {
             }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = smoothCornerShape(8.dp),
+                shape = TacticalStyle.badgeShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
             ) {
                 Row(

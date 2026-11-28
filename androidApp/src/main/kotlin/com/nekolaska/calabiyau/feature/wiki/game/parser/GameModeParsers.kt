@@ -32,7 +32,9 @@ object GameModeParsers {
 
     fun parseModeMapMapping(wikitext: String): Map<String, List<String>> = ModeMapMappingParser.parse(wikitext)
 
-    private val extractionChapters = setOf("等级成长系统", "角色天赋", "任务系统", "局内事件")
+    // The overview already renders settings, win conditions and the tutorial. Music stays on the Wiki.
+    private val overviewSections = setOf("模式介绍", "模式设定", "获胜条件", "玩法教学", "模式音乐")
+    private fun isExtractionChapter(title: String) = title.isNotBlank() && title !in overviewSections
 
     fun parseModeWikitext(mode: ModeEntry, wikitext: String, maps: List<String>, html: String? = null): GameModeDetail =
         readMode(mode, wikitext, maps, html?.takeIf { mode.pageName == EXTRACTION_MODE_PAGE && it.isNotBlank() }?.let(Jsoup::parse))
@@ -41,7 +43,11 @@ object GameModeParsers {
         if (wikitext.isBlank() || (html != null && html.isBlank())) return null
         val document = html?.let(Jsoup::parse)
         val detail = readMode(mode, wikitext, maps, document)
-        if (document != null && !completeFieldGuide(wikitext, document, extractionChapters, detail.chapters)) return null
+        if (document != null) {
+            // The chapter picker and its saved reading positions are keyed by title.
+            if (detail.chapters.distinctBy { it.title }.size != detail.chapters.size ||
+                !completeFieldGuide(wikitext, document, ::isExtractionChapter, detail.chapters)) return null
+        }
         return detail.takeIf { it.summary.isNotBlank() || it.settings.isNotBlank() || it.winCondition.isNotBlank() || it.chapters.isNotEmpty() }
     }
 
@@ -71,7 +77,7 @@ object GameModeParsers {
             maps = modeMaps,
             wikiUrl = "$WIKI_BASE$enc",
             chapters = if (extraction && document != null) {
-                parseFieldGuide(document, extractionChapters, extractionArticleUrl(mode.pageName))
+                parseFieldGuide(document, ::isExtractionChapter, extractionArticleUrl(mode.pageName))
             } else emptyList()
         )
     }

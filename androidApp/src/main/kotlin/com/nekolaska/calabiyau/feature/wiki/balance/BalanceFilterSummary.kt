@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.balance
 
-/** 平衡数据页顶部只留一行摘要，完整条件放在底部弹层里。 */
+/** 平衡数据页顶部显示当前查询摘要，段位明细留在筛选弹层。 */
 internal data class BalanceFilterSummary(
     val headline: String,
     val compareLabel: String?

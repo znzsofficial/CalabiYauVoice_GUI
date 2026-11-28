@@ -1,7 +1,13 @@
 package com.nekolaska.calabiyau.feature.wiki.stringer.parser
 
+import org.jsoup.Jsoup
+import org.junit.Assume.assumeNotNull
+import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class StringerParsersTest {
 
@@ -76,5 +82,46 @@ class StringerParsersTest {
         assertEquals("暴击强化", talent.name)
         assertEquals("1", talent.unlockLevel)
         assertEquals(listOf("1级:加5%", "2级:加10%"), talent.details)
+    }
+
+    @Test
+    fun parsesTalentCardAndKeepsTheRenderedOrderOfValues() {
+        val html = """<div class="mw-parser-output"><h2><span class="mw-headline">续航</span></h2>
+            <div class="talent-gallery gallerygrid"><div class="gallerygrid-item talent-card">
+              <div class="talent-card__imagebox"><img src="https://example.test/talent.png"></div>
+              <div class="talent-card__name">弹匣扩容</div>
+              <span class="talent-card__badge">解锁 Lv.12</span>
+              <span class="talent-card__badge talent-card__badge--max">上限 Lv.2</span>
+              <div class="talent-card__effect"><span class="talent-card__label">效果（逐级）</span>突击步枪弹匣子弹数增加 <span class="klbq-num">2</span> / <span class="klbq-num">3</span></div>
+            </div></div></div>"""
+        val item = StringerTalentParsers.parseHtml(html).sections.single().items.single()
+        assertEquals("弹匣扩容", item.name)
+        assertEquals("Lv.12", item.unlockLevel)
+        assertEquals("Lv.2", item.maxLevel)
+        assertEquals(listOf("突击步枪弹匣子弹数增加 2 / 3"), item.details)
+        assertEquals("https://example.test/talent.png", item.imageUrl)
+        assertTrue(StringerTalentParsers.parseHtml(html.replace("<span class=\"klbq-num\">3</span>", "")).sections.isEmpty())
+        assertFalse(StringerTalentParsers.isComplete(html))
+    }
+
+    @Test
+    fun fullTalentRevisionRejectsMissingCardAndMissingLevel() {
+        val path = System.getenv("WIKI_TALENT_NOV28_AUDIT_FILE")
+        assumeNotNull(path)
+        val html = File(path!!).readText()
+        assertTrue(StringerTalentParsers.isComplete(html))
+        val sections = StringerTalentParsers.parseHtml(html).sections
+        assertEquals(listOf("机能", "生存", "续航", "输出"), sections.map { it.title })
+        assertEquals(listOf(6, 6, 6, 6), sections.map { it.items.size })
+        val first = sections.first().items.first()
+        assertEquals("瞬时开镜", first.name)
+        assertEquals("Lv.10", first.maxLevel)
+        assertContains(first.details.single(), "0.8% / 1.6%")
+        assertTrue(first.details.single().endsWith("8%"))
+        assertTrue(sections.flatMap { it.items }.all { !it.imageUrl.isNullOrBlank() })
+        val missingCard = Jsoup.parse(html).apply { selectFirst(".talent-card")!!.remove() }
+        val missingValue = Jsoup.parse(html).apply { selectFirst(".talent-card .klbq-num")!!.remove() }
+        assertFalse(StringerTalentParsers.isComplete(missingCard.outerHtml()))
+        assertFalse(StringerTalentParsers.isComplete(missingValue.outerHtml()))
     }
 }
